@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickServe - Order Food Online</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="auth-page">
+        <div class="auth-card">
+            <div class="logo">🍽️ QuickServe</div>
+            <h2>Welcome Back</h2>
+            <div id="loginError" class="error-message hidden"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Username or Email</label>
+                    <input type="text" id="loginEmail" placeholder="Enter username or email" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <div class="form-group">
+                    <label>Login As</label>
+                    <div class="login-role-selection">
+                        <button type="button" class="login-role-btn selected" id="loginCustomerBtn" data-role="customer">Customer</button>
+                        <button type="button" class="login-role-btn" id="loginAdminBtn" data-role="admin">Admin</button>
+                    </div>
+                </div>
+                <div class="remember-forgot">
+                    <label class="remember-me">
+                        <input type="checkbox" id="rememberMe">
+                        <span>Remember me</span>
+                    </label>
+                    <a href="#" class="forgot-password" onclick="showForgotPassword(); return false;">Forgot Password?</a>
+                </div>
+                <button type="submit" class="btn">Login</button>
+            </form>
+            <div class="auth-link">
+                Don't have an account? <a href="#" onclick="showSignup()">Sign Up</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signup Page -->
+    <div id="signupPage" class="auth-page hidden">
+        <div class="auth-card">
+            <div class="logo">🍽️ QuickServe</div>
+            <h2>Create Account</h2>
+            <div id="signupError" class="error-message hidden"></div>
+            <form id="signupForm">
+                <div class="form-group">
+                    <label for="signupName">Full Name</label>
+                    <input type="text" id="signupName" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupEmail">Email Address</label>
+                    <input type="email" id="signupEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupUsername">Username</label>
+                    <input type="text" id="signupUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupMobile">Mobile Number</label>
+                    <input type="tel" id="signupMobile" pattern="[0-9]{10}" placeholder="10-digit mobile number" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword">Password</label>
+                    <input type="password" id="signupPassword" required>
+                    <div class="password-strength">
+                        <div class="password-strength-bar" id="passwordStrengthBar"></div>
+                    </div>
+                    <div class="password-strength-text" id="passwordStrengthText"></div>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" required>
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <div class="role-selection">
+                        <label class="role-card selected" id="customerRole">
+                            <input type="radio" name="role" value="customer" checked>
+                            <div class="role-icon">🛒</div>
+                            <div class="role-title">Customer</div>
+                            <div class="role-description">Browse and order food</div>
+                        </label>
+                        <label class="role-card" id="adminRole">
+                            <input type="radio" name="role" value="admin">
+                            <div class="role-icon">⚙️</div>
+                            <div class="role-title">Admin</div>
+                            <div class="role-description">Manage restaurant operations</div>
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="btn">Create Account</button>
+            </form>
+            <div class="auth-link">
+                Already have an account? <a href="#" onclick="showLogin()">Login</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="app hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <div class="header-content">
+                    <div class="header-left">
+                        <div class="logo">🍽️ QuickServe</div>
+                        <div class="search-bar">
+                            <span>🔍</span>
+                            <input type="text" placeholder="Search restaurants or dishes..." id="searchInput">
+                        </div>
+                    </div>
+                    <div class="header-right">
+                        <div class="user-menu">
+                            <button class="user-btn" onclick="toggleUserMenu()">
+                                <span id="userName">User</span> ▼
+                            </button>
+                            <div class="dropdown" id="userDropdown">
+                                <button id="adminMenuBtn" class="hidden" onclick="showAdminDashboard()">Admin Dashboard</button>
+                                <button onclick="logout()">Logout</button>
+                            </div>
+                        </div>
+                        <button class="cart-btn" onclick="toggleCart()">
+                            🛒 Cart
+                            <span class="cart-badge" id="cartBadge">0</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+                <!-- Home Page -->
+                <div id="homePage">
+                    <div class="hero">
+                        <h1>Order food from your favorite restaurants</h1>
+                        <p>Delicious meals delivered to your doorstep in minutes</p>
+                    </div>
+                    <div class="restaurants-grid" id="restaurantsGrid">
+                        <!-- Restaurants will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Menu Page -->
+                <div id="menuPage" class="menu-page hidden">
+                    <button class="back-btn" onclick="showHome()">
+                        ← Back to Restaurants
+                    </button>
+                    <div id="restaurantInfo" class="restaurant-info">
+                        <!-- Restaurant info will be populated by JavaScript -->
+                    </div>
+                    <div class="categories" id="menuCategories">
+                        <!-- Categories will be populated by JavaScript -->
+                    </div>
+                    <div id="menuSections">
+                        <!-- Menu sections will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Checkout Page -->
+                <div id="checkoutPage" class="checkout-page hidden">
+                    <div class="checkout-header">
+                        <button class="checkout-back-btn" onclick="backToMenu()">
+                            ← Back to Menu
+                        </button>
+                        <h2 style="margin: 0;">Checkout</h2>
+                        <button class="checkout-home-btn" onclick="showHome()">
+                            🏠 Home
+                        </button>
+                    </div>
+                    <div class="address-section">
+                        <h3>Delivery Address</h3>
+                        <textarea class="address-input" id="deliveryAddress" placeholder="Enter your full delivery address..."></textarea>
+                    </div>
+                    <div class="payment-section">
+                        <h3>Payment Method</h3>
+                        <div class="payment-options">
+                            <div class="payment-option selected" data-method="cod">
+                                💰 Cash on Delivery
+                            </div>
+                            <div class="payment-option" data-method="card">
+                                💳 Card Payment
+                            </div>
+                            <div class="payment-option" data-method="upi">
+                                📱 UPI Payment
+                            </div>
+                        </div>
+                    </div>
+                    <div class="order-summary" id="checkoutSummary">
+                        <!-- Order summary will be populated by JavaScript -->
+                    </div>
+                    <button class="place-order-btn" onclick="placeOrder()">Place Order</button>
+                </div>
+
+                <!-- Success Page -->
+                <div id="successPage" class="success-page hidden">
+                    <div class="success-icon">✅</div>
+                    <h2>Order Placed Successfully!</h2>
+                    <p>Thank you for your order. Your food will be delivered soon.</p>
+                    <div class="order-id" id="orderIdDisplay"></div>
+                    <button class="btn" onclick="showHome()">Order More Food</button>
+                </div>
+
+                <!-- Admin Dashboard -->
+                <div id="adminPage" class="admin-panel hidden">
+                    <div class="admin-header">
+                        <h1>Admin Dashboard</h1>
+                        <button class="btn" onclick="showHome()">Back to Home</button>
+                    </div>
+
+                    <!-- Statistics -->
+                    <div class="stats-grid" id="adminStats">
+                        <!-- Stats will be populated by JavaScript -->
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="admin-tabs">
+                        <button class="admin-tab active" onclick="switchAdminTab('orders')">Orders</button>
+                        <button class="admin-tab" onclick="switchAdminTab('users')">Users</button>
+                    </div>
+
+                    <!-- Orders Section -->
+                    <div id="adminOrders" class="admin-section">
+                        <h3>All Orders</h3>
+                        <table class="orders-table" id="ordersTable">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Customer</th>
+                                    <th>Items</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersTableBody">
+                                <!-- Orders will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Users Section -->
+                    <div id="adminUsers" class="admin-section hidden">
+                        <h3>All Users</h3>
+                        <table class="users-table" id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Orders Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <!-- Users will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Sticky Cart Button -->
+        <button class="sticky-cart" id="stickyCart" onclick="toggleCart()">
+            View Cart • ₹<span id="stickyCartTotal">0</span>
+        </button>
+    </div>
+
+    <!-- Cart Sidebar -->
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h3>Your Cart</h3>
+            <button class="close-cart" onclick="toggleCart()">×</button>
+        </div>
+        <div class="cart-items" id="cartItems">
+            <!-- Cart items will be populated by JavaScript -->
+        </div>
+        <div class="cart-footer">
+            <div class="cart-summary" id="cartSummary">
+                <!-- Cart summary will be populated by JavaScript -->
+            </div>
+            <button class="checkout-btn" onclick="proceedToCheckout()">Proceed to Checkout</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/data.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
