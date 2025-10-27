@@ -1,5 +1,19 @@
 // API Configuration
-const API_URL = 'http://localhost:5000/api';
+// Automatically detects if running locally or in production
+const getApiUrl = () => {
+    const hostname = window.location.hostname;
+    
+    // If running on localhost, use local backend
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:5000/api';
+    }
+    
+    // For production, use your deployed backend URL
+    // TODO: Replace this with your actual backend URL after deployment
+    return 'https://YOUR-BACKEND-URL.vercel.app/api';
+};
+
+const API_URL = getApiUrl();
 let authToken = localStorage.getItem('authToken') || null;
 
 // Application State
@@ -741,12 +755,15 @@ async function renderAdminOrders() {
             const itemsCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
             const date = new Date(order.createdAt).toLocaleString();
             const userName = order.userId?.name || order.userEmail || 'Unknown';
+            const address = order.address || '—';
+            const itemDetails = order.items.map(item => `${item.itemName} × ${item.quantity}`).join('<br>');
             
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td><strong>${order.orderId}</strong></td>
                 <td>${userName}</td>
-                <td>${itemsCount} items</td>
+                <td>${address}</td>
+                <td>${itemDetails || `${itemsCount} items`}</td>
                 <td><strong>Rs ${order.total}</strong></td>
                 <td><span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span></td>
                 <td>${date}</td>
