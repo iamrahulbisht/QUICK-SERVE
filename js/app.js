@@ -34,23 +34,38 @@ const apiCall = async (endpoint, options = {}) => {
         'Content-Type': 'application/json',
         ...options.headers
     };
-    
+
     if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
     }
-    
+
     try {
         const response = await fetch(`${API_URL}${endpoint}`, {
             ...options,
             headers
         });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || data.message || 'API request failed');
+
+        if (response.status === 204 || response.status === 205) {
+            return null;
         }
-        
+
+        const contentType = response.headers.get('content-type') || '';
+        let data = null;
+
+        if (contentType.includes('application/json')) {
+            data = await response.json();
+        } else {
+            const text = await response.text();
+            if (!response.ok) {
+                throw new Error(text || `Request failed with status ${response.status}`);
+            }
+            throw new Error('Server returned an unexpected response format');
+        }
+
+        if (!response.ok) {
+            throw new Error(data?.error || data?.message || `Request failed with status ${response.status}`);
+        }
+
         return data;
     } catch (error) {
         throw error;
