@@ -824,6 +824,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load remembered user if exists
     loadRememberedUser();
     
+    const adminAccessGroup = document.getElementById('adminAccessGroup');
+    const adminAccessInput = document.getElementById('adminAccessCode');
+
     // Login role selection
     document.querySelectorAll('.login-role-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -860,11 +863,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const mobile = document.getElementById('signupMobile').value;
         const password = document.getElementById('signupPassword').value;
         const confirmPassword = document.getElementById('confirmPassword').value;
+        const adminAccessCode = adminAccessInput ? adminAccessInput.value.trim() : '';
         const role = document.querySelector('input[name="role"]:checked').value;
         
         if (password !== confirmPassword) {
             const errorDiv = document.getElementById('signupError');
             errorDiv.textContent = 'Passwords do not match';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        if (role === 'admin' && adminAccessCode !== 'ADMIN123') {
+            const errorDiv = document.getElementById('signupError');
+            errorDiv.textContent = 'Invalid admin access code';
             errorDiv.classList.remove('hidden');
             return;
         }
@@ -885,6 +896,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // Reset role selection to customer
             document.getElementById('customerRole').classList.add('selected');
             document.getElementById('adminRole').classList.remove('selected');
+            if (adminAccessGroup && adminAccessInput) {
+                adminAccessGroup.classList.add('hidden');
+                adminAccessInput.required = false;
+                adminAccessInput.value = '';
+            }
             
             // Show success message and redirect to login
             alert(result.message + '\n\nPlease login with your credentials.');
@@ -910,6 +926,18 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
             this.classList.add('selected');
             this.querySelector('input[type="radio"]').checked = true;
+
+            const selectedRole = this.querySelector('input[type="radio"]').value;
+            if (adminAccessGroup && adminAccessInput) {
+                if (selectedRole === 'admin') {
+                    adminAccessGroup.classList.remove('hidden');
+                    adminAccessInput.required = true;
+                } else {
+                    adminAccessGroup.classList.add('hidden');
+                    adminAccessInput.required = false;
+                    adminAccessInput.value = '';
+                }
+            }
         });
     });
 
@@ -927,6 +955,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Password visibility toggle
+    document.querySelectorAll('.password-toggle').forEach(button => {
+        button.addEventListener('click', function() {
+            const targetInput = document.getElementById(this.dataset.target);
+            if (!targetInput) return;
+
+            const isPassword = targetInput.getAttribute('type') === 'password';
+            targetInput.setAttribute('type', isPassword ? 'text' : 'password');
+            this.classList.toggle('active', isPassword);
+            this.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+        });
+    });
 
     // Payment method selection
     document.addEventListener('click', function(e) {

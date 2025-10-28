@@ -89,6 +89,53 @@ body {
     transition: border-color 0.3s ease;
 }
 
+.password-input {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input input {
+    padding-right: 44px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.password-toggle:focus {
+    outline: none;
+}
+
+.password-toggle svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+}
+
+.password-toggle .icon-eye-off {
+    display: none;
+}
+
+.password-toggle.active .icon-eye {
+    display: none;
+}
+
+.password-toggle.active .icon-eye-off {
+    display: block;
+}
+
 .form-group input:focus {
     outline: none;
     border-color: var(--primary);
