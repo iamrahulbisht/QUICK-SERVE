@@ -1,26 +1,19 @@
-// API Configuration
-// Automatically detects if running locally or in production
 const getApiUrl = () => {
     const { hostname, origin } = window.location;
 
-    // If running on localhost, use local backend
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:5000/api';
     }
-
-    // For deployed environments, reuse the current origin (Render) when available
     if (origin && origin.startsWith('http')) {
         return `${origin.replace(/\/$/, '')}/api`;
     }
 
-    // Fallback to the known Render deployment URL
     return 'https://quick-serve-7n8b.onrender.com/api';
 };
 
 const API_URL = getApiUrl();
 let authToken = localStorage.getItem('authToken') || null;
 
-// Application State
 let currentUser = null;
 let currentRestaurant = null;
 let lastVisitedRestaurant = null;
@@ -28,7 +21,6 @@ let cart = [];
 let orders = [];
 let users = [];
 
-// API Helper Functions
 const apiCall = async (endpoint, options = {}) => {
     const headers = {
         'Content-Type': 'application/json',
