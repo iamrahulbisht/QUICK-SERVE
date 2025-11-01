@@ -2,6 +2,23 @@ const Restaurant = require('../models/Restaurant');
 const Order = require('../models/Order');
 
 const generateOrderId = () => `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+const ALLOWED_PAYMENT_METHODS = ['cod', 'card', 'upi'];
+
+const findMenuItem = (restaurant, menuItemId) => {
+    if (!restaurant?.categories) {
+        return null;
+    }
+
+    for (const category of restaurant.categories) {
+        const items = category?.items || [];
+        const match = items.find((item) => item.id === menuItemId);
+        if (match) {
+            return match;
+        }
+    }
+
+    return null;
+};
 
 exports.getRestaurants = async (req, res) => {
     try {
@@ -82,12 +99,75 @@ exports.createOrder = async (req, res) => {
             });
         }
 
-        const subtotal = items.reduce((sum, item) => {
-            const price = Number(item.price) || 0;
-            const quantity = Number(item.quantity) || 0;
-            return sum + price * quantity;
-        }, 0);
+        const normalizedPaymentMethod = (paymentMethod || 'cod').toLowerCase();
+        if (!ALLOWED_PAYMENT_METHODS.includes(normalizedPaymentMethod)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid payment method'
+            });
+        }
 
+        const restaurantCache = new Map();
+        const itemMap = new Map();
+
+        for (const rawItem of items) {
+            const itemId = rawItem?.itemId;
+            const restaurantId = rawItem?.restaurantId;
+            const quantity = Number(rawItem?.quantity);
+
+            if (!itemId || !restaurantId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Each item must include itemId and restaurantId'
+                });
+            }
+
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Item quantity must be a positive number'
+                });
+            }
+
+            let restaurant = restaurantCache.get(restaurantId);
+            if (!restaurant) {
+                restaurant = await Restaurant.findOne({ id: restaurantId }).lean();
+                if (!restaurant) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Restaurant with id ${restaurantId} not found`
+                    });
+                }
+                restaurantCache.set(restaurantId, restaurant);
+            }
+
+            const menuItem = findMenuItem(restaurant, itemId);
+            if (!menuItem) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Item ${itemId} is not available for restaurant ${restaurant.name}`
+                });
+            }
+
+            const key = `${restaurantId}:${menuItem.id}`;
+            if (itemMap.has(key)) {
+                const existing = itemMap.get(key);
+                existing.quantity += quantity;
+            } else {
+                itemMap.set(key, {
+                    itemId: menuItem.id,
+                    itemName: menuItem.name,
+                    restaurantId: restaurant.id,
+                    restaurantName: restaurant.name,
+                    price: menuItem.price,
+                    quantity,
+                    image: menuItem.image
+                });
+            }
+        }
+
+        const validatedItems = Array.from(itemMap.values());
+        const subtotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const deliveryFee = 40;
         const total = subtotal + deliveryFee;
 
@@ -95,12 +175,12 @@ exports.createOrder = async (req, res) => {
             orderId: generateOrderId(),
             userId: req.user._id,
             userEmail: req.user.email,
-            items,
+            items: validatedItems,
             subtotal,
             deliveryFee,
             total,
             address,
-            paymentMethod: paymentMethod || 'cod'
+            paymentMethod: normalizedPaymentMethod
         });
 
         res.status(201).json({

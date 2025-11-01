@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
+const ADMIN_ACCESS_CODE = process.env.ADMIN_ACCESS_CODE || 'ADMIN123';
+
 // Generate JWT Token
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -11,7 +13,7 @@ const generateToken = (id) => {
 // Register new user
 exports.signup = async (req, res) => {
     try {
-        const { name, email, username, mobile, password, role } = req.body;
+        const { name, email, username, mobile, password, role, adminAccessCode } = req.body;
 
         const userExists = await User.findOne({ $or: [{ email }, { username }] });
         
@@ -22,13 +24,25 @@ exports.signup = async (req, res) => {
             });
         }
 
+        let finalRole = 'customer';
+
+        if (role === 'admin') {
+            if (!adminAccessCode || adminAccessCode !== ADMIN_ACCESS_CODE) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Invalid admin access code'
+                });
+            }
+            finalRole = 'admin';
+        }
+
         const user = await User.create({
             name,
             email,
             username,
             mobile,
             password,
-            role: role || 'customer'
+            role: finalRole
         });
 
         res.status(201).json({

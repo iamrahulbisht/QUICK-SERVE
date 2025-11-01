@@ -138,11 +138,11 @@ function loadRememberedUser() {
     }
 }
 
-async function signup(name, email, username, mobile, password, role) {
+async function signup(name, email, username, mobile, password, role, adminAccessCode) {
     try {
         const data = await apiCall('/auth/signup', {
             method: 'POST',
-            body: JSON.stringify({ name, email, username, mobile, password, role: role || 'customer' })
+            body: JSON.stringify({ name, email, username, mobile, password, role: role || 'customer', adminAccessCode })
         });
         
         return data;
@@ -698,15 +698,17 @@ function showAdminDashboard() {
     
     renderAdminStats();
     renderAdminOrders();
-    switchAdminTab('orders');
+    switchAdminTab('orders', null);
 }
 
-function switchAdminTab(tab) {
+function switchAdminTab(tab, evt) {
     // Update tab buttons
     document.querySelectorAll('.admin-tab').forEach(btn => {
         btn.classList.remove('active');
     });
-    event.target.classList.add('active');
+    if (evt?.target) {
+        evt.target.classList.add('active');
+    }
     
     // Show/hide sections
     if (tab === 'orders') {
@@ -876,6 +878,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const confirmPassword = document.getElementById('confirmPassword').value;
         const adminAccessCode = adminAccessInput ? adminAccessInput.value.trim() : '';
         const role = document.querySelector('input[name="role"]:checked').value;
+        const finalAdminAccessCode = role === 'admin' ? adminAccessCode : undefined;
         
         if (password !== confirmPassword) {
             const errorDiv = document.getElementById('signupError');
@@ -898,7 +901,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const result = await signup(name, email, username, mobile, password, role);
+        const result = await signup(name, email, username, mobile, password, role, finalAdminAccessCode);
         if (result.success) {
             // Clear form
             document.getElementById('signupForm').reset();
