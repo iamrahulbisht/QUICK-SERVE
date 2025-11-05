@@ -18,6 +18,8 @@ let currentUser = null;
 let currentRestaurant = null;
 let lastVisitedRestaurant = null;
 let cart = [];
+let orderMode = 'delivery'; // 'delivery' or 'dinein'
+let selectedTableNumber = null;
 let orders = [];
 let users = [];
 let userLocation = JSON.parse(localStorage.getItem('userLocation')) || null;
@@ -325,14 +327,71 @@ function showHome() {
     renderRestaurants();
 }
 
+// Order Mode Functions
+function selectOrderMode(mode) {
+    orderMode = mode;
+    
+    // Update button states
+    const modeButtons = document.querySelectorAll('.mode-btn');
+    modeButtons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.mode === mode) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Show/hide table number section
+    const tableSection = document.getElementById('tableNumberSection');
+    if (mode === 'dinein') {
+        tableSection.classList.remove('hidden');
+    } else {
+        tableSection.classList.add('hidden');
+        selectedTableNumber = null;
+    }
+    
+    console.log('Order mode selected:', mode);
+}
+
+function isDineInMode() {
+    return orderMode === 'dinein';
+}
+
+function getDineInTable() {
+    const tableSelect = document.getElementById('tableNumber');
+    const tableValue = tableSelect ? tableSelect.value : selectedTableNumber;
+    console.log('Getting dine-in table:', tableValue);
+    return tableValue ? parseInt(tableValue) : null;
+}
+
 function showMenu(restaurantId) {
     if (currentUser && currentUser.role === 'admin') {
         return;
     }
     currentRestaurant = restaurants[restaurantId];
     lastVisitedRestaurant = restaurantId;
+    
+    // Reset order mode to delivery
+    orderMode = 'delivery';
+    selectedTableNumber = null;
+    
     document.getElementById('homePage').classList.add('hidden');
     document.getElementById('menuPage').classList.remove('hidden');
+    
+    // Reset mode buttons
+    const modeButtons = document.querySelectorAll('.mode-btn');
+    modeButtons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.mode === 'delivery') {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Hide table number section
+    const tableSection = document.getElementById('tableNumberSection');
+    if (tableSection) {
+        tableSection.classList.add('hidden');
+    }
+    
     renderMenu();
 }
 
@@ -349,24 +408,35 @@ function showCheckout() {
     document.getElementById('menuPage').classList.add('hidden');
     document.getElementById('checkoutPage').classList.remove('hidden');
     
-    // Hide/show address section based on mode
-    const addressSection = document.querySelector('.address-section');
+    // Show order mode info
+    const orderModeInfo = document.getElementById('orderModeInfo');
+    const addressSection = document.getElementById('addressSection');
+    
     if (isDineInMode()) {
-        addressSection.style.display = 'none';
-        
-        // Show dine-in info
-        const deliveryInfoDiv = document.getElementById('deliveryInfo');
-        if (deliveryInfoDiv) {
-            deliveryInfoDiv.innerHTML = `
-                <div style="background: var(--accent-purple); color: white; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
-                    <h3 style="color: white; margin-bottom: 8px;">🍽️ Dine-In Order</h3>
-                    <p style="margin: 0;">Table ${getDineInTable()}</p>
-                    <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">Your order will be served at your table</p>
-                </div>
-            `;
+        const tableNum = getDineInTable();
+        if (!tableNum) {
+            alert('Please select a table number before proceeding to checkout');
+            backToMenu();
+            return;
         }
+        
+        addressSection.style.display = 'none';
+        orderModeInfo.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="mode-badge dinein">🍽️ Dine-In</span>
+                <span style="font-weight: 600;">Table ${tableNum}</span>
+                <span style="color: var(--text-light);">|</span>
+                <span style="color: var(--text-secondary);">Your order will be served at your table</span>
+            </div>
+        `;
     } else {
         addressSection.style.display = 'block';
+        orderModeInfo.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="mode-badge delivery">🚚 Delivery</span>
+                <span style="color: var(--text-secondary);">Your order will be delivered to your address</span>
+            </div>
+        `;
         updateDeliveryInfo();
     }
     
@@ -376,7 +446,23 @@ function showCheckout() {
 function showSuccess(orderId) {
     document.getElementById('checkoutPage').classList.add('hidden');
     document.getElementById('successPage').classList.remove('hidden');
+    
+    // Update order ID
     document.getElementById('orderIdDisplay').textContent = `Order ID: ${orderId}`;
+    
+    // Update success message based on order mode
+    const successPage = document.getElementById('successPage');
+    const messageElement = successPage.querySelector('p');
+    
+    if (isDineInMode()) {
+        messageElement.textContent = 'Thank you for your order. Your food will be served at your table soon.';
+    } else {
+        messageElement.textContent = 'Thank you for your order. Your food will be delivered soon.';
+    }
+    
+    // Clear cart after showing success
+    cart = [];
+    updateCartDisplay();
 }
 
 // Render Functions
@@ -520,6 +606,20 @@ function renderMenu() {
 
 // Cart Functions
 function addToCart(itemId) {
+    // Validate table selection for dine-in mode
+    if (isDineInMode()) {
+        const tableNum = getDineInTable();
+        if (!tableNum) {
+            alert('Please select a table number before adding items to your cart');
+            // Scroll to table selection
+            const tableSection = document.getElementById('tableNumberSection');
+            if (tableSection) {
+                tableSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+    }
+    
     const item = findItemById(itemId);
     if (!item) return;
 
@@ -607,7 +707,13 @@ function renderCartItems() {
     });
 
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const deliveryFee = 40;
+    
+    // Dine-in mode has NO delivery fee
+    let deliveryFee = 0;
+    if (!isDineInMode()) {
+        deliveryFee = 40;
+    }
+    
     const total = subtotal + deliveryFee;
 
     cartSummaryDiv.innerHTML = `
@@ -615,10 +721,12 @@ function renderCartItems() {
             <span>Subtotal</span>
             <span>₹${subtotal}</span>
         </div>
+        ${!isDineInMode() ? `
         <div class="summary-row">
             <span>Delivery Fee</span>
             <span>₹${deliveryFee}</span>
         </div>
+        ` : ''}
         <div class="summary-row total">
             <span>Total</span>
             <span>₹${total}</span>
@@ -781,10 +889,25 @@ function proceedToCheckout() {
 async function placeOrder() {
     const address = document.getElementById('deliveryAddress').value.trim();
     
+    console.log('=== PLACE ORDER DEBUG ===');
+    console.log('Order Mode:', orderMode);
+    console.log('Is Dine-In?:', isDineInMode());
+    console.log('Table Number:', getDineInTable());
+    console.log('Address:', address);
+    
     // Skip address validation for dine-in mode
     if (!isDineInMode() && !address) {
         alert('Please enter delivery address');
         return;
+    }
+    
+    // Validate table number for dine-in mode
+    if (isDineInMode()) {
+        const tableNum = getDineInTable();
+        if (!tableNum) {
+            alert('Please select a table number for dine-in orders');
+            return;
+        }
     }
 
     if (cart.length === 0) {
@@ -865,9 +988,13 @@ async function placeOrder() {
         if (isDineInMode()) {
             orderData.mode = 'dinein';
             orderData.tableNumber = getDineInTable();
+            console.log('✅ DINE-IN ORDER - No address, no delivery fee');
+            console.log('Table Number:', orderData.tableNumber);
         } else {
             orderData.mode = 'delivery';
             orderData.address = address;
+            console.log('🚚 DELIVERY ORDER - Address required');
+            console.log('Address:', orderData.address);
             
             // Add location coordinates if available
             if (userLocation && userLocation.latitude && userLocation.longitude) {
@@ -875,6 +1002,8 @@ async function placeOrder() {
                 orderData.longitude = userLocation.longitude;
             }
         }
+        
+        console.log('📦 Final Order Data being sent:', JSON.stringify(orderData, null, 2));
         
         const response = await fetch(`${API_URL}/orders`, {
             method: 'POST',
@@ -892,9 +1021,6 @@ async function placeOrder() {
         }
 
         if (data.success) {
-            // Clear cart after successful order
-            cart = [];
-            updateCartDisplay();
             // Show success page with order ID
             showSuccess(data.data.orderId);
             // Hide checkout page
@@ -1102,10 +1228,34 @@ async function loadOrderHistory() {
                 `;
             });
             
+            // Determine order mode badge
+            const orderMode = order.mode || 'delivery';
+            const modeBadge = orderMode === 'dinein' 
+                ? `<span class="mode-badge dinein">🍽️ Dine-In</span>` 
+                : `<span class="mode-badge delivery">🚚 Delivery</span>`;
+            
+            // Show appropriate location info based on mode
+            let locationInfo = '';
+            if (orderMode === 'dinein') {
+                locationInfo = `
+                    <div class="order-location">
+                        <strong>Table Number:</strong> ${order.tableNumber}
+                    </div>
+                `;
+            } else if (order.address) {
+                locationInfo = `
+                    <div class="order-address">
+                        <strong>Delivery Address:</strong>
+                        ${order.address}
+                    </div>
+                `;
+            }
+            
             orderCard.innerHTML = `
                 <div class="order-card-header">
                     <div>
                         <div class="order-id">${order.orderId}</div>
+                        ${modeBadge}
                         <div class="order-date">${orderDate}</div>
                     </div>
                     <span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span>
@@ -1115,10 +1265,7 @@ async function loadOrderHistory() {
                     ${itemsHtml}
                 </div>
                 
-                <div class="order-address">
-                    <strong>Delivery Address:</strong>
-                    ${order.address}
-                </div>
+                ${locationInfo}
                 
                 <div class="order-card-footer">
                     <span>Payment: ${order.paymentMethod.toUpperCase()}</span>
@@ -1236,14 +1383,23 @@ async function renderAdminOrders() {
             const itemsCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
             const date = new Date(order.createdAt).toLocaleString();
             const userName = order.userId?.name || order.userEmail || 'Unknown';
-            const address = order.address || '—';
+            const orderMode = order.mode || 'delivery';
+            
+            // Show appropriate location info based on mode
+            let locationInfo = '';
+            if (orderMode === 'dinein') {
+                locationInfo = `<span class="mode-badge dinein">🍽️ Table ${order.tableNumber}</span>`;
+            } else {
+                locationInfo = order.address || '—';
+            }
+            
             const itemDetails = order.items.map(item => `${item.itemName} × ${item.quantity}`).join('<br>');
             
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td><strong>${order.orderId}</strong></td>
                 <td>${userName}</td>
-                <td>${address}</td>
+                <td>${locationInfo}</td>
                 <td>${itemDetails || `${itemsCount} items`}</td>
                 <td><strong>Rs ${order.total}</strong></td>
                 <td><span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span></td>

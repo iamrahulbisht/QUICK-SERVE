@@ -169,7 +169,8 @@ exports.getDashboard = async (req, res) => {
                     name: restaurant.name,
                     address: restaurant.address,
                     isApproved: restaurant.isApproved,
-                    totalTables: restaurant.totalTables
+                    totalTables: restaurant.totalTables,
+                    categories: restaurant.categories || []
                 },
                 analytics: {
                     totalOrders,

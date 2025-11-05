@@ -227,17 +227,22 @@ function showOwnerDashboardTab(tabName) {
 
 // Load owner dishes
 async function loadOwnerDishes() {
-    console.log('Loading dishes...', ownerRestaurant);
+    console.log('=== LOADING OWNER DISHES ===');
+    console.log('Owner Restaurant:', ownerRestaurant);
+    
     if (!ownerRestaurant) {
-        console.error('No restaurant data available');
+        console.error('❌ No restaurant data available');
         return;
     }
     
     const dishesContainer = document.getElementById('dishesContainer');
     if (!dishesContainer) {
-        console.error('Dishes container not found');
+        console.error('❌ Dishes container not found');
         return;
     }
+    
+    console.log('Categories:', ownerRestaurant.categories);
+    console.log('Categories length:', ownerRestaurant.categories ? ownerRestaurant.categories.length : 0);
     
     if (!ownerRestaurant.categories || ownerRestaurant.categories.length === 0) {
         dishesContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No dishes added yet. Click "Add New Dish" to get started.</p>';
@@ -246,12 +251,20 @@ async function loadOwnerDishes() {
     
     const allDishes = [];
     ownerRestaurant.categories.forEach(category => {
-        category.items.forEach(item => {
-            allDishes.push({ ...item, category: category.name });
-        });
+        console.log('Processing category:', category.name, 'Items:', category.items ? category.items.length : 0);
+        if (category.items && category.items.length > 0) {
+            category.items.forEach(item => {
+                allDishes.push({ ...item, category: category.name });
+            });
+        }
     });
     
-    console.log('Rendering dishes:', allDishes.length);
+    console.log('✅ Total dishes to render:', allDishes.length);
+    
+    if (allDishes.length === 0) {
+        dishesContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No dishes added yet. Click "Add New Dish" to get started.</p>';
+        return;
+    }
     
     dishesContainer.innerHTML = allDishes.map(dish => `
         <div class="dish-card">

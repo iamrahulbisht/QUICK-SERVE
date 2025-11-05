@@ -465,6 +465,48 @@
                     <div id="restaurantInfo" class="restaurant-info">
                         <!-- Restaurant info will be populated by JavaScript -->
                     </div>
+                    
+                    <!-- Order Mode Selection -->
+                    <div class="order-mode-section">
+                        <h3>How would you like to order?</h3>
+                        <div class="mode-buttons">
+                            <button class="mode-btn active" data-mode="delivery" onclick="selectOrderMode('delivery')">
+                                <span class="mode-icon">🚚</span>
+                                <span class="mode-text">Delivery</span>
+                            </button>
+                            <button class="mode-btn" data-mode="dinein" onclick="selectOrderMode('dinein')">
+                                <span class="mode-icon">🍽️</span>
+                                <span class="mode-text">Dine-In</span>
+                            </button>
+                        </div>
+                        <div id="tableNumberSection" class="table-number-section hidden">
+                            <label for="tableNumber">Select Table Number:</label>
+                            <select id="tableNumber" class="table-select">
+                                <option value="">Choose a table...</option>
+                                <option value="1">Table 1</option>
+                                <option value="2">Table 2</option>
+                                <option value="3">Table 3</option>
+                                <option value="4">Table 4</option>
+                                <option value="5">Table 5</option>
+                                <option value="6">Table 6</option>
+                                <option value="7">Table 7</option>
+                                <option value="8">Table 8</option>
+                                <option value="9">Table 9</option>
+                                <option value="10">Table 10</option>
+                                <option value="11">Table 11</option>
+                                <option value="12">Table 12</option>
+                                <option value="13">Table 13</option>
+                                <option value="14">Table 14</option>
+                                <option value="15">Table 15</option>
+                                <option value="16">Table 16</option>
+                                <option value="17">Table 17</option>
+                                <option value="18">Table 18</option>
+                                <option value="19">Table 19</option>
+                                <option value="20">Table 20</option>
+                            </select>
+                        </div>
+                    </div>
+                    
                     <div class="categories" id="menuCategories">
                         <!-- Categories will be populated by JavaScript -->
                     </div>
@@ -484,10 +526,13 @@
                             🏠 Home
                         </button>
                     </div>
+                    <div class="order-mode-info" id="orderModeInfo">
+                        <!-- Order mode info will be displayed here -->
+                    </div>
                     <div class="delivery-info" id="deliveryInfo">
                         <!-- Delivery information will be populated here -->
                     </div>
-                    <div class="address-section">
+                    <div class="address-section" id="addressSection">
                         <h3>Delivery Address</h3>
                         <textarea class="address-input" id="deliveryAddress" placeholder="Enter your full delivery address..."></textarea>
                     </div>
