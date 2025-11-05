@@ -644,29 +644,106 @@ async function placeOrder() {
     }
 
     if (cart.length === 0) {
-        alert('Cart is empty');
+        alert('Your cart is empty. Please add items to your cart before placing an order.');
         return;
     }
     
     const paymentMethod = document.querySelector('.payment-option.selected')?.getAttribute('data-method') || 'cod';
 
+    // Check if user is logged in
+    if (!authToken) {
+        alert('Please login to place an order');
+        showLogin();
+        return;
+    }
+
     try {
-        const data = await apiCall('/orders', {
+        // Log the cart items for debugging
+        console.log('Cart items before formatting:', cart);
+        
+        // Map of restaurant IDs to their correct format
+        const restaurantIdMap = {
+            'burger-palace': 'burgerPalace',
+            'pizza-corner': 'pizzaCorner',
+            'spice-of-india': 'spiceOfIndia'
+        };
+
+        // Map of item IDs to their correct format for each restaurant
+        const itemIdMap = {
+            'burgerPalace': {
+                'bp001': 'bp1',
+                'bp002': 'bp2',
+                'bp003': 'bp3',
+                'bp004': 'bp4',
+                'bp005': 'bp5'
+            },
+            'pizzaCorner': {
+                'pc001': 'pc1',
+                'pc002': 'pc2',
+                'pc003': 'pc3'
+            },
+            'spiceOfIndia': {
+                'si001': 'si1',
+                'si002': 'si2',
+                'si003': 'si3',
+                'si004': 'si4',
+                'si005': 'si5'
+            }
+        };
+        
+        // Prepare cart items with properly formatted IDs
+        const formattedCart = cart.map(item => {
+            // Get the correct restaurant ID format
+            const restaurantId = restaurantIdMap[item.restaurantId] || item.restaurantId;
+            
+            // Get the correct item ID format for this restaurant
+            const itemIdMapForRestaurant = itemIdMap[restaurantId] || {};
+            const itemId = itemIdMapForRestaurant[item.itemId] || item.itemId;
+            
+            console.log(`Converting: ${item.restaurantId}:${item.itemId} -> ${restaurantId}:${itemId}`);
+            
+            return {
+                ...item,
+                itemId: itemId,
+                restaurantId: restaurantId
+            };
+        });
+
+        console.log('Formatted cart items:', formattedCart);
+        
+        const response = await fetch(`${API_URL}/orders`, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify({
-                items: cart,
+                items: formattedCart,
                 address,
                 paymentMethod
             })
         });
+
+        const data = await response.json();
         
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to place order');
+        }
+
         if (data.success) {
+            // Clear cart after successful order
             cart = [];
             updateCartDisplay();
+            // Show success page with order ID
             showSuccess(data.data.orderId);
+            // Hide checkout page
+            document.getElementById('checkoutPage').classList.add('hidden');
+        } else {
+            throw new Error(data.message || 'Failed to place order');
         }
     } catch (error) {
-        alert('Error placing order: ' + error.message);
+        console.error('Order error:', error);
+        alert('Error placing order: ' + (error.message || 'Please try again later'));
     }
 }
 
