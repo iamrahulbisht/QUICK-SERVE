@@ -83,9 +83,14 @@ exports.login = async (req, res) => {
         }
 
         if (user.role !== role) {
+            const roleNames = {
+                'admin': 'Admin',
+                'customer': 'Customer',
+                'restaurantOwner': 'Restaurant Owner'
+            };
             return res.status(401).json({
                 success: false,
-                error: `This account is registered as ${user.role === 'admin' ? 'Admin' : 'Customer'}. Please select the correct role.`
+                error: `This account is registered as ${roleNames[user.role] || user.role}. Please select the correct role.`
             });
         }
 

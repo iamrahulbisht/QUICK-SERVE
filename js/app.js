@@ -88,16 +88,25 @@ async function login(identifier, password, selectedRole, rememberMe) {
             localStorage.setItem('authToken', authToken);
             currentUser = data.user;
             
+            console.log('Login successful. User role:', data.user.role);
+            
             document.getElementById('userName').textContent = data.user.name;
+            
+            // Hide all pages first to prevent overlap
             document.getElementById('loginPage').classList.add('hidden');
             document.getElementById('signupPage').classList.add('hidden');
             document.getElementById('restaurantOwnerSignupPage').classList.add('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('restaurantOwnerDashboard').classList.add('hidden');
+            document.getElementById('adminPage').classList.add('hidden');
             
             if (data.user.role === 'restaurantOwner') {
+                console.log('Showing restaurant owner dashboard');
                 // Show restaurant owner dashboard
                 document.getElementById('restaurantOwnerDashboard').classList.remove('hidden');
                 await loadOwnerDashboard();
             } else {
+                console.log('Showing main app for role:', data.user.role);
                 // Show main app
                 document.getElementById('mainApp').classList.remove('hidden');
                 
@@ -128,22 +137,45 @@ async function login(identifier, password, selectedRole, rememberMe) {
         return { success: false, error: error.message };
     }
 }
-
 async function loadCurrentUser() {
     if (!authToken) return;
     
     try {
         const response = await apiCall('/auth/me');
-        if (response.success) {
+        if (response.success && response.data) {
             currentUser = response.data;
+            
+            // Hide all pages first
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('signupPage').classList.add('hidden');
+            document.getElementById('restaurantOwnerSignupPage').classList.add('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('restaurantOwnerDashboard').classList.add('hidden');
+            document.getElementById('adminPage').classList.add('hidden');
             
             if (currentUser.role === 'restaurantOwner') {
                 document.getElementById('restaurantOwnerDashboard').classList.remove('hidden');
                 await loadOwnerDashboard();
+            } else if (currentUser.role === 'admin') {
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('adminMenuBtn').classList.remove('hidden');
+                await loadRestaurants();
+                showAdminDashboard();
+            } else {
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('adminMenuBtn').classList.add('hidden');
+                await loadRestaurants();
+                showHome();
             }
+        } else {
+            // If user data is invalid, logout
+            console.log('Invalid user data, logging out');
+            logout();
         }
     } catch (error) {
         console.error('Error loading user:', error);
+        // If there's an error loading user, logout
+        logout();
     }
 }
 
@@ -228,22 +260,42 @@ function logout() {
     localStorage.removeItem('authToken');
     localStorage.removeItem('rememberedUser');
     updateCartDisplay();
+    
+    // Hide all possible pages/dashboards
     document.getElementById('mainApp').classList.add('hidden');
+    document.getElementById('adminPage').classList.add('hidden');
+    document.getElementById('restaurantOwnerDashboard').classList.add('hidden');
+    document.getElementById('homePage').classList.add('hidden');
+    document.getElementById('menuPage').classList.add('hidden');
+    document.getElementById('checkoutPage').classList.add('hidden');
+    document.getElementById('successPage').classList.add('hidden');
+    document.getElementById('profilePage').classList.add('hidden');
+    document.getElementById('orderHistoryPage').classList.add('hidden');
+    document.getElementById('signupPage').classList.add('hidden');
+    document.getElementById('restaurantOwnerSignupPage').classList.add('hidden');
+    
+    // Show login page
     document.getElementById('loginPage').classList.remove('hidden');
     document.getElementById('userDropdown').classList.remove('show');
+    
+    console.log('Logged out successfully');
 }
 
 // Load restaurants from API
 async function loadRestaurants() {
     try {
+        console.log('Loading restaurants from API...');
         const data = await apiCall('/restaurants');
         if (data.success && data.data) {
+            console.log('Restaurants loaded:', data.data.length);
             // Convert array to object format for compatibility
             const restaurantsObj = {};
             data.data.forEach(restaurant => {
+                console.log('Restaurant:', restaurant.name, 'Categories:', restaurant.categories?.length || 0);
                 restaurantsObj[restaurant.id] = restaurant;
             });
             Object.assign(restaurants, restaurantsObj);
+            console.log('Total restaurants in object:', Object.keys(restaurants).length);
         }
     } catch (error) {
         console.error('Error loading restaurants:', error);
@@ -358,7 +410,13 @@ function renderRestaurants() {
 }
 
 function renderMenu() {
-    if (!currentRestaurant) return;
+    if (!currentRestaurant) {
+        console.error('No current restaurant selected');
+        return;
+    }
+
+    console.log('Rendering menu for:', currentRestaurant.name);
+    console.log('Categories:', currentRestaurant.categories?.length || 0);
 
     // Restaurant Info
     const infoDiv = document.getElementById('restaurantInfo');
@@ -375,7 +433,16 @@ function renderMenu() {
     // Categories
     const categoriesDiv = document.getElementById('menuCategories');
     categoriesDiv.innerHTML = '';
+    
+    if (!currentRestaurant.categories || currentRestaurant.categories.length === 0) {
+        console.warn('No categories found for restaurant');
+        const sectionsDiv = document.getElementById('menuSections');
+        sectionsDiv.innerHTML = '<p style="text-align: center; padding: 40px; color: #666;">No menu items available yet.</p>';
+        return;
+    }
+    
     currentRestaurant.categories.forEach((category, index) => {
+        console.log('Category:', category.name, 'Items:', category.items?.length || 0);
         const btn = document.createElement('button');
         btn.className = `category-btn ${index === 0 ? 'active' : ''}`;
         btn.textContent = category.name;
@@ -387,6 +454,8 @@ function renderMenu() {
     const sectionsDiv = document.getElementById('menuSections');
     sectionsDiv.innerHTML = '';
     currentRestaurant.categories.forEach(category => {
+        console.log('Processing category:', category.name, 'Items array:', category.items);
+        
         const section = document.createElement('div');
         section.className = 'menu-section';
         section.id = `category-${category.name.replace(/\s+/g, '-').toLowerCase()}`;
@@ -398,14 +467,26 @@ function renderMenu() {
         const grid = document.createElement('div');
         grid.className = 'menu-grid';
 
+        // Check if items exist and is an array
+        if (!category.items || !Array.isArray(category.items) || category.items.length === 0) {
+            console.warn('No items in category:', category.name);
+            const emptyMsg = document.createElement('p');
+            emptyMsg.style.cssText = 'text-align: center; padding: 20px; color: #999;';
+            emptyMsg.textContent = 'No items in this category yet';
+            section.appendChild(emptyMsg);
+            sectionsDiv.appendChild(section);
+            return;
+        }
+
         category.items.forEach(item => {
+            console.log('Rendering item:', item.name, 'ID:', item.id);
             const cartItem = cart.find(c => c.itemId === item.id);
             const quantity = cartItem ? cartItem.quantity : 0;
 
             const itemDiv = document.createElement('div');
             itemDiv.className = 'menu-item';
             itemDiv.innerHTML = `
-                <img src="${item.image}" alt="${item.name}" class="menu-item-image" 
+                <img src="${item.image || ''}" alt="${item.name}" class="menu-item-image" 
                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div class="menu-item-image-placeholder" style="display: none;">🍽️</div>
                 <div class="menu-item-content">
@@ -1247,6 +1328,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const password = document.getElementById('loginPassword').value;
         const selectedRole = document.querySelector('.login-role-btn.selected').getAttribute('data-role');
         const rememberMe = document.getElementById('rememberMe').checked;
+        
+        console.log('Attempting login as:', selectedRole);
         
         const result = await login(identifier, password, selectedRole, rememberMe);
         

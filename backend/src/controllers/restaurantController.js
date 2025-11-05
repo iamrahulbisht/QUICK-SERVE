@@ -3,10 +3,11 @@ const Restaurant = require('../models/Restaurant');
 exports.getRestaurants = async (req, res) => {
     try {
         const { search } = req.query;
-        let query = {};
+        let query = { isApproved: true }; // Only show approved restaurants
 
         if (search) {
             query = {
+                isApproved: true, // Keep approval filter
                 $or: [
                     { name: { $regex: search, $options: 'i' } },
                     { cuisine: { $regex: search, $options: 'i' } },
