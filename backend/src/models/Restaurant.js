@@ -24,14 +24,52 @@ const restaurantSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    ownerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
     emoji: String,
     cardImage: String,
+    logo: String,
     cuisine: String,
-    rating: Number,
+    rating: {
+        type: Number,
+        default: 0
+    },
     deliveryTime: String,
-    categories: [categorySchema]
+    openTime: {
+        type: String,
+        default: '09:00'
+    },
+    closeTime: {
+        type: String,
+        default: '22:00'
+    },
+    isApproved: {
+        type: Boolean,
+        default: false
+    },
+    categories: [categorySchema],
+    location: {
+        type: {
+            type: String,
+            enum: ['Point'],
+            default: 'Point'
+        },
+        coordinates: {
+            type: [Number],
+            default: [0, 0]
+        }
+    },
+    address: String,
+    totalTables: {
+        type: Number,
+        default: 10
+    }
 }, {
     timestamps: true
 });
+
+restaurantSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Restaurant', restaurantSchema);

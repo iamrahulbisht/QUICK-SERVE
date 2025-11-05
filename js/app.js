@@ -20,6 +20,7 @@ let lastVisitedRestaurant = null;
 let cart = [];
 let orders = [];
 let users = [];
+let userLocation = JSON.parse(localStorage.getItem('userLocation')) || null;
 
 const apiCall = async (endpoint, options = {}) => {
     const headers = {
@@ -90,12 +91,26 @@ async function login(identifier, password, selectedRole, rememberMe) {
             document.getElementById('userName').textContent = data.user.name;
             document.getElementById('loginPage').classList.add('hidden');
             document.getElementById('signupPage').classList.add('hidden');
-            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('restaurantOwnerSignupPage').classList.add('hidden');
             
-            if (data.user.role === 'admin') {
-                document.getElementById('adminMenuBtn').classList.remove('hidden');
+            if (data.user.role === 'restaurantOwner') {
+                // Show restaurant owner dashboard
+                document.getElementById('restaurantOwnerDashboard').classList.remove('hidden');
+                await loadOwnerDashboard();
             } else {
-                document.getElementById('adminMenuBtn').classList.add('hidden');
+                // Show main app
+                document.getElementById('mainApp').classList.remove('hidden');
+                
+                if (data.user.role === 'admin') {
+                    document.getElementById('adminMenuBtn').classList.remove('hidden');
+                    await loadRestaurants();
+                    showAdminDashboard();
+                } else {
+                    document.getElementById('adminMenuBtn').classList.add('hidden');
+                    await loadRestaurants();
+                    checkDineInMode(); // Check if accessing via QR code
+                    showHome();
+                }
             }
             
             if (rememberMe) {
@@ -107,16 +122,28 @@ async function login(identifier, password, selectedRole, rememberMe) {
                 localStorage.removeItem('rememberedUser');
             }
             
-            await loadRestaurants();
-            if (data.user.role === 'admin') {
-                showAdminDashboard();
-            } else {
-                showHome();
-            }
             return { success: true };
         }
     } catch (error) {
         return { success: false, error: error.message };
+    }
+}
+
+async function loadCurrentUser() {
+    if (!authToken) return;
+    
+    try {
+        const response = await apiCall('/auth/me');
+        if (response.success) {
+            currentUser = response.data;
+            
+            if (currentUser.role === 'restaurantOwner') {
+                document.getElementById('restaurantOwnerDashboard').classList.remove('hidden');
+                await loadOwnerDashboard();
+            }
+        }
+    } catch (error) {
+        console.error('Error loading user:', error);
     }
 }
 
@@ -235,6 +262,8 @@ function showHome() {
     document.getElementById('checkoutPage').classList.add('hidden');
     document.getElementById('successPage').classList.add('hidden');
     document.getElementById('adminPage').classList.add('hidden');
+    document.getElementById('profilePage').classList.add('hidden');
+    document.getElementById('orderHistoryPage').classList.add('hidden');
     
     // Clear search input and show all restaurants
     const searchInput = document.getElementById('searchInput');
@@ -267,6 +296,28 @@ function showCheckout() {
     document.getElementById('homePage').classList.add('hidden');
     document.getElementById('menuPage').classList.add('hidden');
     document.getElementById('checkoutPage').classList.remove('hidden');
+    
+    // Hide/show address section based on mode
+    const addressSection = document.querySelector('.address-section');
+    if (isDineInMode()) {
+        addressSection.style.display = 'none';
+        
+        // Show dine-in info
+        const deliveryInfoDiv = document.getElementById('deliveryInfo');
+        if (deliveryInfoDiv) {
+            deliveryInfoDiv.innerHTML = `
+                <div style="background: var(--accent-purple); color: white; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+                    <h3 style="color: white; margin-bottom: 8px;">🍽️ Dine-In Order</h3>
+                    <p style="margin: 0;">Table ${getDineInTable()}</p>
+                    <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">Your order will be served at your table</p>
+                </div>
+            `;
+        }
+    } else {
+        addressSection.style.display = 'block';
+        updateDeliveryInfo();
+    }
+    
     renderCheckoutSummary();
 }
 
@@ -503,7 +554,15 @@ function renderCheckoutSummary() {
     }
 
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const deliveryFee = 40;
+    
+    // Dine-in mode has no delivery fee
+    let deliveryFee = 0;
+    if (!isDineInMode()) {
+        deliveryFee = (window.currentDeliveryData && window.currentDeliveryData.deliveryFee) 
+            ? window.currentDeliveryData.deliveryFee 
+            : 40;
+    }
+    
     const total = subtotal + deliveryFee;
 
     let itemsHtml = '';
@@ -519,10 +578,12 @@ function renderCheckoutSummary() {
     summaryDiv.innerHTML = `
         <h4 style="margin-bottom: 12px;">Order Summary</h4>
         ${itemsHtml}
+        ${!isDineInMode() ? `
         <div class="summary-row">
             <span>Delivery Fee</span>
             <span>₹${deliveryFee}</span>
         </div>
+        ` : ''}
         <div class="summary-row total">
             <span>Total</span>
             <span>₹${total}</span>
@@ -638,7 +699,9 @@ function proceedToCheckout() {
 
 async function placeOrder() {
     const address = document.getElementById('deliveryAddress').value.trim();
-    if (!address) {
+    
+    // Skip address validation for dine-in mode
+    if (!isDineInMode() && !address) {
         alert('Please enter delivery address');
         return;
     }
@@ -711,17 +774,34 @@ async function placeOrder() {
 
         console.log('Formatted cart items:', formattedCart);
         
+        // Prepare order data
+        const orderData = {
+            items: formattedCart,
+            paymentMethod
+        };
+        
+        // Check if dine-in mode
+        if (isDineInMode()) {
+            orderData.mode = 'dinein';
+            orderData.tableNumber = getDineInTable();
+        } else {
+            orderData.mode = 'delivery';
+            orderData.address = address;
+            
+            // Add location coordinates if available
+            if (userLocation && userLocation.latitude && userLocation.longitude) {
+                orderData.latitude = userLocation.latitude;
+                orderData.longitude = userLocation.longitude;
+            }
+        }
+        
         const response = await fetch(`${API_URL}/orders`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${authToken}`
             },
-            body: JSON.stringify({
-                items: formattedCart,
-                address,
-                paymentMethod
-            })
+            body: JSON.stringify(orderData)
         });
 
         const data = await response.json();
@@ -766,6 +846,231 @@ function showAdminDashboard() {
     document.getElementById('checkoutPage').classList.add('hidden');
     document.getElementById('successPage').classList.add('hidden');
     document.getElementById('adminPage').classList.remove('hidden');
+    document.getElementById('profilePage').classList.add('hidden');
+    document.getElementById('orderHistoryPage').classList.add('hidden');
+    document.getElementById('userDropdown').classList.remove('show');
+    const adminBackButton = document.querySelector('#adminPage .btn');
+    if (adminBackButton) {
+        adminBackButton.textContent = 'Logout';
+        adminBackButton.onclick = logout;
+    }
+    
+    renderAdminStats();
+    renderAdminOrders();
+    switchAdminTab('orders', null);
+}
+
+// Profile Functions
+async function showProfile() {
+    document.getElementById('homePage').classList.add('hidden');
+    document.getElementById('menuPage').classList.add('hidden');
+    document.getElementById('checkoutPage').classList.add('hidden');
+    document.getElementById('successPage').classList.add('hidden');
+    document.getElementById('adminPage').classList.add('hidden');
+    document.getElementById('profilePage').classList.remove('hidden');
+    document.getElementById('orderHistoryPage').classList.add('hidden');
+    document.getElementById('userDropdown').classList.remove('show');
+    
+    // Load user profile data
+    try {
+        const data = await apiCall('/auth/me');
+        if (data.success && data.user) {
+            document.getElementById('profileName').value = data.user.name || '';
+            document.getElementById('profileEmail').value = data.user.email || '';
+            document.getElementById('profileUsername').value = data.user.username || '';
+            document.getElementById('profileMobile').value = data.user.mobile || '';
+        }
+    } catch (error) {
+        console.error('Error loading profile:', error);
+    }
+}
+
+async function updateProfile(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('profileName').value.trim();
+    const email = document.getElementById('profileEmail').value.trim();
+    const mobile = document.getElementById('profileMobile').value.trim();
+    
+    const errorDiv = document.getElementById('profileError');
+    const successDiv = document.getElementById('profileSuccess');
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    try {
+        const data = await apiCall('/auth/profile', {
+            method: 'PUT',
+            body: JSON.stringify({ name, email, mobile })
+        });
+        
+        if (data.success) {
+            currentUser = data.user;
+            document.getElementById('userName').textContent = data.user.name;
+            successDiv.textContent = data.message || 'Profile updated successfully!';
+            successDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                successDiv.classList.add('hidden');
+            }, 3000);
+        }
+    } catch (error) {
+        errorDiv.textContent = error.message || 'Failed to update profile';
+        errorDiv.classList.remove('hidden');
+    }
+}
+
+async function changePassword(event) {
+    event.preventDefault();
+    
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+    
+    const errorDiv = document.getElementById('profileError');
+    const successDiv = document.getElementById('profileSuccess');
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    if (newPassword !== confirmNewPassword) {
+        errorDiv.textContent = 'New passwords do not match';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        errorDiv.textContent = 'Password must be at least 6 characters';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    
+    try {
+        const data = await apiCall('/auth/profile', {
+            method: 'PUT',
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+        
+        if (data.success) {
+            successDiv.textContent = 'Password changed successfully!';
+            successDiv.classList.remove('hidden');
+            document.getElementById('passwordForm').reset();
+            
+            setTimeout(() => {
+                successDiv.classList.add('hidden');
+            }, 3000);
+        }
+    } catch (error) {
+        errorDiv.textContent = error.message || 'Failed to change password';
+        errorDiv.classList.remove('hidden');
+    }
+}
+
+// Order History Functions
+async function showOrderHistory() {
+    document.getElementById('homePage').classList.add('hidden');
+    document.getElementById('menuPage').classList.add('hidden');
+    document.getElementById('checkoutPage').classList.add('hidden');
+    document.getElementById('successPage').classList.add('hidden');
+    document.getElementById('adminPage').classList.add('hidden');
+    document.getElementById('profilePage').classList.add('hidden');
+    document.getElementById('orderHistoryPage').classList.remove('hidden');
+    document.getElementById('userDropdown').classList.remove('show');
+    
+    await loadOrderHistory();
+}
+
+async function loadOrderHistory() {
+    const container = document.getElementById('orderHistoryList');
+    
+    try {
+        const data = await apiCall('/orders/my-orders');
+        
+        if (!data.success || data.data.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📦</div>
+                    <h3>No orders yet</h3>
+                    <p>Start exploring restaurants and place your first order!</p>
+                    <button class="btn" onclick="showHome()">Browse Restaurants</button>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = '';
+        
+        data.data.forEach(order => {
+            const orderCard = document.createElement('div');
+            orderCard.className = 'order-card';
+            
+            const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            let itemsHtml = '';
+            order.items.forEach(item => {
+                itemsHtml += `
+                    <div class="order-item-row">
+                        <span class="order-item-name">${item.itemName}</span>
+                        <span class="order-item-quantity">× ${item.quantity}</span>
+                        <span class="order-item-price">₹${item.price * item.quantity}</span>
+                    </div>
+                `;
+            });
+            
+            orderCard.innerHTML = `
+                <div class="order-card-header">
+                    <div>
+                        <div class="order-id">${order.orderId}</div>
+                        <div class="order-date">${orderDate}</div>
+                    </div>
+                    <span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span>
+                </div>
+                
+                <div class="order-items-list">
+                    ${itemsHtml}
+                </div>
+                
+                <div class="order-address">
+                    <strong>Delivery Address:</strong>
+                    ${order.address}
+                </div>
+                
+                <div class="order-card-footer">
+                    <span>Payment: ${order.paymentMethod.toUpperCase()}</span>
+                    <span class="order-total">₹${order.total}</span>
+                </div>
+            `;
+            
+            container.appendChild(orderCard);
+        });
+    } catch (error) {
+        console.error('Error loading order history:', error);
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">⚠️</div>
+                <h3>Failed to load orders</h3>
+                <p>Please try again later</p>
+            </div>
+        `;
+    }
+}
+
+// Admin Functions
+function showAdminDashboard() {
+    if (!currentUser || currentUser.role !== 'admin') {
+        alert('Access denied. Admin only.');
+        return;
+    }
+    
+    document.getElementById('homePage').classList.add('hidden');
+    document.getElementById('menuPage').classList.add('hidden');
+    document.getElementById('checkoutPage').classList.add('hidden');
+    document.getElementById('successPage').classList.add('hidden');
+    document.getElementById('adminPage').classList.remove('hidden');
     document.getElementById('userDropdown').classList.remove('show');
     const adminBackButton = document.querySelector('#adminPage .btn');
     if (adminBackButton) {
@@ -788,14 +1093,19 @@ function switchAdminTab(tab, evt) {
     }
     
     // Show/hide sections
+    document.getElementById('adminOrders').classList.add('hidden');
+    document.getElementById('adminUsers').classList.add('hidden');
+    document.getElementById('adminRestaurants').classList.add('hidden');
+    
     if (tab === 'orders') {
         document.getElementById('adminOrders').classList.remove('hidden');
-        document.getElementById('adminUsers').classList.add('hidden');
         renderAdminOrders();
     } else if (tab === 'users') {
-        document.getElementById('adminOrders').classList.add('hidden');
         document.getElementById('adminUsers').classList.remove('hidden');
         renderAdminUsers();
+    } else if (tab === 'restaurants') {
+        document.getElementById('adminRestaurants').classList.remove('hidden');
+        loadRestaurantApprovals();
     }
 }
 
@@ -911,6 +1221,11 @@ async function updateOrderStatus(orderId, newStatus) {
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if user is already logged in
+    if (authToken) {
+        loadCurrentUser();
+    }
+    
     // Load remembered user if exists
     loadRememberedUser();
     
@@ -1060,6 +1375,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Profile form submission
+    const profileForm = document.getElementById('profileForm');
+    if (profileForm) {
+        profileForm.addEventListener('submit', updateProfile);
+    }
+
+    // Password change form submission
+    const passwordForm = document.getElementById('passwordForm');
+    if (passwordForm) {
+        passwordForm.addEventListener('submit', changePassword);
+    }
+
     // Payment method selection
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('payment-option')) {
@@ -1079,4 +1406,478 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize cart display
     updateCartDisplay();
+    
+    // Initialize location display
+    updateLocationDisplay();
 });
+
+// Location Functions
+function showLocationModal() {
+    const modal = document.getElementById('locationModal');
+    modal.classList.add('active');
+    
+    // Pre-fill saved location if exists
+    if (userLocation && userLocation.address) {
+        document.getElementById('manualAddress').value = userLocation.address;
+    }
+}
+
+function closeLocationModal() {
+    const modal = document.getElementById('locationModal');
+    modal.classList.remove('active');
+    hideLocationError();
+    document.getElementById('locationPreview').classList.add('hidden');
+}
+
+function showLocationError(message) {
+    const errorDiv = document.getElementById('locationError');
+    errorDiv.textContent = message;
+    errorDiv.classList.remove('hidden');
+}
+
+function hideLocationError() {
+    document.getElementById('locationError').classList.add('hidden');
+}
+
+async function detectLocation() {
+    hideLocationError();
+    
+    if (!navigator.geolocation) {
+        showLocationError('Geolocation is not supported by your browser');
+        return;
+    }
+
+    const detectBtn = document.querySelector('.detect-location-btn');
+    const originalText = detectBtn.innerHTML;
+    detectBtn.innerHTML = '<span class="btn-icon">⏳</span><div><div class="btn-title">Detecting...</div></div>';
+    detectBtn.disabled = true;
+
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            
+            try {
+                // Reverse geocode to get address
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+                    {
+                        headers: {
+                            'User-Agent': 'QuickServe Food Delivery App'
+                        }
+                    }
+                );
+                
+                if (!response.ok) {
+                    throw new Error('Failed to get address');
+                }
+                
+                const data = await response.json();
+                const address = data.display_name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                
+                showLocationPreview(address, lat, lon);
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                showLocationPreview(`Location: ${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon);
+            } finally {
+                detectBtn.innerHTML = originalText;
+                detectBtn.disabled = false;
+            }
+        },
+        (error) => {
+            let message = 'Unable to retrieve your location';
+            if (error.code === 1) {
+                message = 'Location access denied. Please enable location permissions.';
+            } else if (error.code === 2) {
+                message = 'Location unavailable. Please try again.';
+            } else if (error.code === 3) {
+                message = 'Location request timeout. Please try again.';
+            }
+            showLocationError(message);
+            detectBtn.innerHTML = originalText;
+            detectBtn.disabled = false;
+        }
+    );
+}
+
+async function searchAddress() {
+    const addressInput = document.getElementById('manualAddress');
+    const address = addressInput.value.trim();
+    
+    if (!address) {
+        showLocationError('Please enter an address');
+        return;
+    }
+    
+    hideLocationError();
+    const searchBtn = document.querySelector('.btn-secondary');
+    const originalText = searchBtn.textContent;
+    searchBtn.textContent = 'Searching...';
+    searchBtn.disabled = true;
+    
+    try {
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,
+            {
+                headers: {
+                    'User-Agent': 'QuickServe Food Delivery App'
+                }
+            }
+        );
+        
+        if (!response.ok) {
+            throw new Error('Search failed');
+        }
+        
+        const data = await response.json();
+        
+        if (data.length === 0) {
+            showLocationError('Address not found. Please try a different address.');
+            return;
+        }
+        
+        const result = data[0];
+        const lat = parseFloat(result.lat);
+        const lon = parseFloat(result.lon);
+        
+        showLocationPreview(result.display_name, lat, lon);
+    } catch (error) {
+        console.error('Address search error:', error);
+        showLocationError('Failed to search address. Please try again.');
+    } finally {
+        searchBtn.textContent = originalText;
+        searchBtn.disabled = false;
+    }
+}
+
+function showLocationPreview(address, latitude, longitude) {
+    document.getElementById('selectedAddress').textContent = address;
+    document.getElementById('selectedLat').textContent = latitude.toFixed(6);
+    document.getElementById('selectedLon').textContent = longitude.toFixed(6);
+    document.getElementById('locationPreview').classList.remove('hidden');
+    
+    // Store temporary location
+    window.tempLocation = { address, latitude, longitude };
+}
+
+async function saveLocation() {
+    if (!window.tempLocation) {
+        showLocationError('No location selected');
+        return;
+    }
+    
+    const { address, latitude, longitude } = window.tempLocation;
+    
+    try {
+        const response = await apiCall('/location/save', {
+            method: 'POST',
+            body: JSON.stringify({ address, latitude, longitude })
+        });
+        
+        if (response.success) {
+            userLocation = { address, latitude, longitude };
+            localStorage.setItem('userLocation', JSON.stringify(userLocation));
+            updateLocationDisplay();
+            closeLocationModal();
+            
+            // Show success message
+            alert('Location saved successfully!');
+        } else {
+            showLocationError(response.message || 'Failed to save location');
+        }
+    } catch (error) {
+        console.error('Save location error:', error);
+        showLocationError('Failed to save location. Please try again.');
+    }
+}
+
+function updateLocationDisplay() {
+    const locationText = document.getElementById('locationText');
+    if (userLocation && userLocation.address) {
+        // Show shortened address
+        const parts = userLocation.address.split(',');
+        const shortAddress = parts[0] || userLocation.address;
+        locationText.textContent = shortAddress.length > 20 
+            ? shortAddress.substring(0, 20) + '...' 
+            : shortAddress;
+        locationText.title = userLocation.address;
+    } else {
+        locationText.textContent = 'Set location';
+    }
+}
+
+async function calculateDeliveryInfo() {
+    if (!userLocation || !currentRestaurant) {
+        return null;
+    }
+    
+    try {
+        const response = await apiCall('/location/calculate', {
+            method: 'POST',
+            body: JSON.stringify({
+                restaurantId: currentRestaurant.id,
+                userLatitude: userLocation.latitude,
+                userLongitude: userLocation.longitude
+            })
+        });
+        
+        if (response.success) {
+            return response.data;
+        }
+        return null;
+    } catch (error) {
+        console.error('Calculate delivery error:', error);
+        return null;
+    }
+}
+
+async function updateDeliveryInfo() {
+    const deliveryInfoDiv = document.getElementById('deliveryInfo');
+    
+    if (!deliveryInfoDiv) return;
+    
+    if (!userLocation) {
+        deliveryInfoDiv.innerHTML = `
+            <div style="text-align: center; padding: 12px;">
+                <p style="color: var(--text-secondary); margin-bottom: 12px;">Set your location for accurate delivery details</p>
+                <button class="btn-secondary" onclick="showLocationModal()">Set Location</button>
+            </div>
+        `;
+        return;
+    }
+    
+    const deliveryData = await calculateDeliveryInfo();
+    
+    if (deliveryData && deliveryData.hasLocation) {
+        deliveryInfoDiv.innerHTML = `
+            <h3>🚴 Delivery Information</h3>
+            <div class="delivery-detail">
+                <span>Distance:</span>
+                <span>${deliveryData.distance.toFixed(2)} km</span>
+            </div>
+            <div class="delivery-detail">
+                <span>Estimated Time:</span>
+                <span>${deliveryData.estimatedTime}</span>
+            </div>
+            <div class="delivery-detail">
+                <span>Delivery Fee:</span>
+                <span>₹${deliveryData.deliveryFee}</span>
+            </div>
+        `;
+        
+        // Store delivery data for order placement
+        window.currentDeliveryData = deliveryData;
+    } else {
+        deliveryInfoDiv.innerHTML = `
+            <h3>🚴 Delivery Information</h3>
+            <div class="delivery-detail">
+                <span>Estimated Time:</span>
+                <span>30-40 mins</span>
+            </div>
+            <div class="delivery-detail">
+                <span>Delivery Fee:</span>
+                <span>₹40</span>
+            </div>
+        `;
+        window.currentDeliveryData = null;
+    }
+}
+
+// Dine-In Mode Functions
+let dineInMode = {
+    active: false,
+    restaurantId: null,
+    tableNumber: null
+};
+
+function checkDineInMode() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const restaurant = urlParams.get('restaurant');
+    const table = urlParams.get('table');
+    const mode = urlParams.get('mode');
+    
+    if (mode === 'dinein' && restaurant && table) {
+        dineInMode = {
+            active: true,
+            restaurantId: restaurant,
+            tableNumber: parseInt(table)
+        };
+        
+        // Show dine-in indicator
+        const header = document.querySelector('.header');
+        if (header && !document.getElementById('dineInBanner')) {
+            const banner = document.createElement('div');
+            banner.id = 'dineInBanner';
+            banner.style.cssText = 'background: var(--accent-purple); color: white; padding: 12px; text-align: center; font-weight: 500;';
+            banner.innerHTML = `🍽️ Dine-In Mode - Table ${table}`;
+            header.parentNode.insertBefore(banner, header.nextSibling);
+        }
+        
+        // Auto-navigate to the restaurant
+        const restaurantObj = restaurants.find(r => r.id === restaurant);
+        if (restaurantObj) {
+            showMenu(restaurant);
+        }
+    }
+}
+
+function isDineInMode() {
+    return dineInMode.active;
+}
+
+function getDineInTable() {
+    return dineInMode.tableNumber;
+}
+
+// Restaurant Approval Functions
+async function loadRestaurantApprovals() {
+    try {
+        const [pendingData, approvedData] = await Promise.all([
+            apiCall('/admin/restaurants/pending'),
+            apiCall('/admin/restaurants')
+        ]);
+
+        if (pendingData.success) {
+            const pending = pendingData.data || [];
+            const approved = approvedData.success ? approvedData.data.filter(r => r.isApproved) : [];
+            
+            document.getElementById('pendingCount').textContent = pending.length;
+            document.getElementById('approvedCount').textContent = approved.length;
+            
+            renderRestaurantApprovals(pending, 'pendingRestaurants');
+            renderRestaurantApprovals(approved, 'approvedRestaurants');
+        }
+    } catch (error) {
+        console.error('Error loading restaurant approvals:', error);
+        showToast('Failed to load restaurant approvals', 'error');
+    }
+}
+
+function renderRestaurantApprovals(restaurants, containerId) {
+    const container = document.getElementById(containerId);
+    
+    if (!restaurants || restaurants.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">🏪</div>
+                <div class="empty-state-text">No restaurants found</div>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = restaurants.map(restaurant => `
+        <div class="restaurant-approval-card">
+            <h4>${restaurant.name}</h4>
+            <div class="restaurant-info">
+                <div class="info-row">
+                    <span class="info-label">Owner:</span>
+                    <span class="info-value">${restaurant.ownerId?.name || 'N/A'}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">${restaurant.ownerId?.email || 'N/A'}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Phone:</span>
+                    <span class="info-value">${restaurant.ownerId?.mobile || 'N/A'}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Cuisine:</span>
+                    <span class="info-value">${restaurant.cuisine || 'N/A'}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Address:</span>
+                    <span class="info-value">${restaurant.address || 'N/A'}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Tables:</span>
+                    <span class="info-value">${restaurant.totalTables || 'N/A'}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value">
+                        <span class="status-badge ${restaurant.isApproved ? 'status-approved' : 'status-pending'}">
+                            ${restaurant.isApproved ? 'Approved' : 'Pending'}
+                        </span>
+                    </span>
+                </div>
+            </div>
+            ${!restaurant.isApproved ? `
+                <div class="approval-actions">
+                    <button class="btn-approve" onclick="approveRestaurant('${restaurant._id}')">
+                        ✓ Approve
+                    </button>
+                    <button class="btn-reject" onclick="rejectRestaurant('${restaurant._id}', '${restaurant.name}')">
+                        ✗ Reject
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+function showApprovalStatus(status) {
+    document.querySelectorAll('.approval-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    if (status === 'pending') {
+        document.getElementById('pendingRestaurants').classList.remove('hidden');
+        document.getElementById('approvedRestaurants').classList.add('hidden');
+    } else {
+        document.getElementById('pendingRestaurants').classList.add('hidden');
+        document.getElementById('approvedRestaurants').classList.remove('hidden');
+    }
+}
+
+async function approveRestaurant(restaurantId) {
+    if (!confirm('Are you sure you want to approve this restaurant?')) {
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/admin/restaurants/${restaurantId}/approve`, {
+            method: 'PUT'
+        });
+        
+        if (data.success) {
+            showToast('Restaurant approved successfully!', 'success');
+            loadRestaurantApprovals();
+        } else {
+            showToast(data.message || 'Failed to approve restaurant', 'error');
+        }
+    } catch (error) {
+        console.error('Error approving restaurant:', error);
+        showToast('Failed to approve restaurant', 'error');
+    }
+}
+
+async function rejectRestaurant(restaurantId, restaurantName) {
+    const reason = prompt(`Are you sure you want to reject "${restaurantName}"?\n\nEnter reason for rejection (optional):`);
+    
+    if (reason === null) {
+        return; // User cancelled
+    }
+    
+    try {
+        const data = await apiCall(`/admin/restaurants/${restaurantId}/reject`, {
+            method: 'PUT',
+            body: JSON.stringify({ reason })
+        });
+        
+        if (data.success) {
+            showToast('Restaurant rejected and removed', 'success');
+            loadRestaurantApprovals();
+        } else {
+            showToast(data.message || 'Failed to reject restaurant', 'error');
+        }
+    } catch (error) {
+        console.error('Error rejecting restaurant:', error);
+        showToast('Failed to reject restaurant', 'error');
+    }
+}
+
+
+

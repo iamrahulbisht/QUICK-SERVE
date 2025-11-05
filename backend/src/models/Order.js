@@ -29,18 +29,49 @@ const orderSchema = new mongoose.Schema({
         default: 40
     },
     total: Number,
-    address: {
+    mode: {
         type: String,
-        required: true
+        enum: ['delivery', 'dinein'],
+        default: 'delivery'
+    },
+    tableNumber: {
+        type: Number
+    },
+    address: {
+        type: String
+    },
+    deliveryLocation: {
+        type: {
+            type: String,
+            enum: ['Point'],
+            default: 'Point'
+        },
+        coordinates: {
+            type: [Number],
+            default: [0, 0]
+        }
+    },
+    distance: {
+        type: Number,
+        default: 0
+    },
+    estimatedDeliveryTime: {
+        type: String,
+        default: '30-40 mins'
     },
     paymentMethod: {
         type: String,
         default: 'cod'
     },
+    paymentStatus: {
+        type: String,
+        enum: ['pending', 'paid'],
+        default: 'pending'
+    },
     status: {
         type: String,
-        enum: ['Placed', 'Preparing', 'Delivered', 'Cancelled'],
-        default: 'Placed'
+        enum: ['received', 'preparing', 'served', 'delivered', 'cancelled'],
+        default: 'received'
     }
 }, {
     timestamps: true

@@ -42,6 +42,7 @@
                     <div class="login-role-selection">
                         <button type="button" class="login-role-btn selected" id="loginCustomerBtn" data-role="customer">Customer</button>
                         <button type="button" class="login-role-btn" id="loginAdminBtn" data-role="admin">Admin</button>
+                        <button type="button" class="login-role-btn" id="loginOwnerBtn" data-role="restaurantOwner">Restaurant Owner</button>
                     </div>
                 </div>
                 <div class="remember-forgot">
@@ -55,6 +56,245 @@
             </form>
             <div class="auth-link">
                 Don't have an account? <a href="#" onclick="showSignup()">Sign Up</a>
+            </div>
+            <div class="auth-link" style="margin-top: 8px;">
+                Want to add your restaurant? <a href="#" onclick="showRestaurantOwnerSignup()">Register as Owner</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restaurant Owner Signup Page -->
+    <div id="restaurantOwnerSignupPage" class="auth-page hidden">
+        <div class="auth-card" style="max-width: 700px;">
+            <div class="logo">🍽️ QuickServe</div>
+            <h2>Register Your Restaurant</h2>
+            <div id="ownerSignupError" class="error-message hidden"></div>
+            <form id="ownerSignupForm">
+                <div class="form-section">
+                    <h3>Access Verification</h3>
+                    <div class="form-group">
+                        <label for="ownerPasscode">Restaurant Owner Passcode *</label>
+                        <input type="password" id="ownerPasscode" placeholder="Enter passcode to proceed" required>
+                        <small class="form-hint">Contact support to get your registration passcode</small>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Personal Information</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ownerName">Full Name *</label>
+                            <input type="text" id="ownerName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ownerMobile">Mobile Number *</label>
+                            <input type="tel" id="ownerMobile" pattern="[0-9]{10}" placeholder="10-digit number" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="ownerEmail">Email Address *</label>
+                        <input type="email" id="ownerEmail" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ownerPassword">Password *</label>
+                            <input type="password" id="ownerPassword" minlength="6" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ownerConfirmPassword">Confirm Password *</label>
+                            <input type="password" id="ownerConfirmPassword" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Restaurant Details</h3>
+                    <div class="form-group">
+                        <label for="restaurantName">Restaurant Name *</label>
+                        <input type="text" id="restaurantName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="restaurantAddress">Restaurant Address *</label>
+                        <textarea id="restaurantAddress" rows="3" required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="restaurantCuisine">Cuisine Type *</label>
+                            <input type="text" id="restaurantCuisine" placeholder="e.g., Italian, Indian, Chinese" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="totalTables">Number of Tables</label>
+                            <input type="number" id="totalTables" min="1" value="10">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="openTime">Opening Time</label>
+                            <input type="time" id="openTime" value="09:00">
+                        </div>
+                        <div class="form-group">
+                            <label for="closeTime">Closing Time</label>
+                            <input type="time" id="closeTime" value="22:00">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="restaurantLat">Latitude</label>
+                            <input type="number" id="restaurantLat" step="any" placeholder="28.6139">
+                            <button type="button" class="btn-link" onclick="detectRestaurantLocation()">📍 Detect Location</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="restaurantLon">Longitude</label>
+                            <input type="number" id="restaurantLon" step="any" placeholder="77.2090">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="restaurantLogo">Restaurant Logo URL (optional)</label>
+                        <input type="url" id="restaurantLogo" placeholder="https://example.com/logo.jpg">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn">Register Restaurant</button>
+            </form>
+            <div class="auth-link">
+                Already registered? <a href="#" onclick="showLogin()">Login</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restaurant Owner Dashboard -->
+    <div id="restaurantOwnerDashboard" class="dashboard hidden">
+        <div class="dashboard-sidebar">
+            <div class="sidebar-header">
+                <div class="logo">🍽️ QuickServe</div>
+                <div class="restaurant-info" id="sidebarRestaurantInfo">
+                    <div class="restaurant-name">Loading...</div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-item active" onclick="showOwnerDashboardTab('overview')">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </button>
+                <button class="nav-item" onclick="showOwnerDashboardTab('dishes')">
+                    <span class="nav-icon">🍽️</span>
+                    <span>Dishes</span>
+                </button>
+                <button class="nav-item" onclick="showOwnerDashboardTab('orders')">
+                    <span class="nav-icon">📦</span>
+                    <span>Orders</span>
+                </button>
+                <button class="nav-item" onclick="showOwnerDashboardTab('qrcodes')">
+                    <span class="nav-icon">📱</span>
+                    <span>QR Codes</span>
+                </button>
+                <button class="nav-item" onclick="showOwnerDashboardTab('settings')">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Settings</span>
+                </button>
+                <button class="nav-item logout-btn" onclick="logout()">
+                    <span class="nav-icon">🚪</span>
+                    <span>Logout</span>
+                </button>
+            </nav>
+        </div>
+
+        <div class="dashboard-main">
+            <!-- Overview Tab -->
+            <div id="ownerOverviewTab" class="dashboard-tab active">
+                <div class="dashboard-header">
+                    <h1>Dashboard Overview</h1>
+                    <div class="approval-status" id="approvalStatus"></div>
+                </div>
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats will be populated by JS -->
+                </div>
+                <div class="dashboard-section">
+                    <h2>Top Selling Dishes</h2>
+                    <div id="topDishes" class="top-dishes-list">
+                        <!-- Top dishes will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dishes Tab -->
+            <div id="ownerDishesTab" class="dashboard-tab hidden">
+                <div class="dashboard-header">
+                    <h1>Manage Dishes</h1>
+                    <button class="btn" onclick="showAddDishModal()">+ Add New Dish</button>
+                </div>
+                <div id="dishesContainer" class="dishes-grid">
+                    <!-- Dishes will be populated by JS -->
+                </div>
+            </div>
+
+            <!-- Orders Tab -->
+            <div id="ownerOrdersTab" class="dashboard-tab hidden">
+                <div class="dashboard-header">
+                    <h1>Orders</h1>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" onclick="filterOrders('all')">All</button>
+                        <button class="filter-btn" onclick="filterOrders('delivery')">Delivery</button>
+                        <button class="filter-btn" onclick="filterOrders('dinein')">Dine-In</button>
+                    </div>
+                </div>
+                <div id="ordersContainer" class="orders-list">
+                    <!-- Orders will be populated by JS -->
+                </div>
+            </div>
+
+            <!-- QR Codes Tab -->
+            <div id="ownerQRTab" class="dashboard-tab hidden">
+                <div class="dashboard-header">
+                    <h1>Table QR Codes</h1>
+                    <button class="btn" onclick="downloadAllQRCodes()">📥 Download All</button>
+                </div>
+                <div class="qr-info">
+                    <p>Generate QR codes for your tables. Customers can scan these to order directly from their table.</p>
+                </div>
+                <div id="qrCodesGrid" class="qr-codes-grid">
+                    <!-- QR codes will be populated by JS -->
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="ownerSettingsTab" class="dashboard-tab hidden">
+                <div class="dashboard-header">
+                    <h1>Restaurant Settings</h1>
+                </div>
+                <form id="restaurantSettingsForm" class="settings-form">
+                    <div class="form-group">
+                        <label>Restaurant Name</label>
+                        <input type="text" id="settingsName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Address</label>
+                        <textarea id="settingsAddress" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Cuisine Type</label>
+                        <input type="text" id="settingsCuisine" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Opening Time</label>
+                            <input type="time" id="settingsOpenTime">
+                        </div>
+                        <div class="form-group">
+                            <label>Closing Time</label>
+                            <input type="time" id="settingsCloseTime">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Total Tables</label>
+                        <input type="number" id="settingsTotalTables" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Restaurant Logo URL</label>
+                        <input type="url" id="settingsLogo">
+                    </div>
+                    <button type="submit" class="btn">Save Changes</button>
+                </form>
             </div>
         </div>
     </div>
@@ -173,6 +413,10 @@
                 <div class="header-content">
                     <div class="header-left">
                         <div class="logo">🍽️ QuickServe</div>
+                        <button class="location-btn" onclick="showLocationModal()">
+                            <span>📍</span>
+                            <span id="locationText">Set location</span>
+                        </button>
                         <div class="search-bar">
                             <span>🔍</span>
                             <input type="text" placeholder="Search restaurants or dishes..." id="searchInput">
@@ -184,6 +428,8 @@
                                 <span id="userName">User</span> ▼
                             </button>
                             <div class="dropdown" id="userDropdown">
+                                <button onclick="showProfile()">My Profile</button>
+                                <button onclick="showOrderHistory()">Order History</button>
                                 <button id="adminMenuBtn" class="hidden" onclick="showAdminDashboard()">Admin Dashboard</button>
                                 <button onclick="logout()">Logout</button>
                             </div>
@@ -238,6 +484,9 @@
                             🏠 Home
                         </button>
                     </div>
+                    <div class="delivery-info" id="deliveryInfo">
+                        <!-- Delivery information will be populated here -->
+                    </div>
                     <div class="address-section">
                         <h3>Delivery Address</h3>
                         <textarea class="address-input" id="deliveryAddress" placeholder="Enter your full delivery address..."></textarea>
@@ -287,6 +536,7 @@
                     <div class="admin-tabs">
                         <button class="admin-tab active" onclick="switchAdminTab('orders', event)">Orders</button>
                         <button class="admin-tab" onclick="switchAdminTab('users', event)">Users</button>
+                        <button class="admin-tab" onclick="switchAdminTab('restaurants', event)">Restaurant Approvals</button>
                     </div>
 
                     <!-- Orders Section -->
@@ -328,6 +578,144 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Restaurant Approvals Section -->
+                    <div id="adminRestaurants" class="admin-section hidden">
+                        <h3>Restaurant Approvals</h3>
+                        
+                        <div class="approval-tabs">
+                            <button class="approval-tab active" onclick="showApprovalStatus('pending')">Pending (<span id="pendingCount">0</span>)</button>
+                            <button class="approval-tab" onclick="showApprovalStatus('approved')">Approved (<span id="approvedCount">0</span>)</button>
+                        </div>
+
+                        <div id="pendingRestaurants" class="restaurants-grid">
+                            <!-- Pending restaurants will be populated by JavaScript -->
+                        </div>
+
+                        <div id="approvedRestaurants" class="restaurants-grid hidden">
+                            <!-- Approved restaurants will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Page -->
+                <div id="profilePage" class="profile-page hidden">
+                    <div class="profile-header">
+                        <button class="back-btn" onclick="showHome()">← Back to Home</button>
+                        <h2>My Profile</h2>
+                    </div>
+                    
+                    <div class="profile-container">
+                        <div class="profile-card">
+                            <div class="profile-section">
+                                <h3>Personal Information</h3>
+                                <div id="profileError" class="error-message hidden"></div>
+                                <div id="profileSuccess" class="success-message hidden"></div>
+                                
+                                <form id="profileForm">
+                                    <div class="form-group">
+                                        <label for="profileName">Full Name</label>
+                                        <input type="text" id="profileName" required>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="profileEmail">Email Address</label>
+                                        <input type="email" id="profileEmail" required>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="profileUsername">Username</label>
+                                        <input type="text" id="profileUsername" disabled>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="profileMobile">Mobile Number</label>
+                                        <input type="tel" id="profileMobile" pattern="[0-9]{10}" placeholder="10-digit mobile number" required>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn">Update Profile</button>
+                                </form>
+                            </div>
+                            
+                            <div class="profile-section">
+                                <h3>Change Password</h3>
+                                <form id="passwordForm">
+                                    <div class="form-group">
+                                        <label for="currentPassword">Current Password</label>
+                                        <div class="password-input">
+                                            <input type="password" id="currentPassword" required>
+                                            <button type="button" class="password-toggle" data-target="currentPassword" aria-label="Show password">
+                                                <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                    <circle cx="12" cy="12" r="3" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
+                                                <svg class="icon-eye-off" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M3 3l18 18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M10.584 10.587a2.003 2.003 0 0 0 2.829 2.829" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M9.88 4.256C10.57 4.085 11.28 4 12 4c7 0 11 8 11 8a21.5 21.5 0 0 1-3.21 4.39" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M6.18 6.18C2.83 8.3 1 12 1 12s4 8 11 8c2.18 0 4.09-.74 5.73-1.86" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="newPassword">New Password</label>
+                                        <div class="password-input">
+                                            <input type="password" id="newPassword" required>
+                                            <button type="button" class="password-toggle" data-target="newPassword" aria-label="Show password">
+                                                <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                    <circle cx="12" cy="12" r="3" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
+                                                <svg class="icon-eye-off" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M3 3l18 18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M10.584 10.587a2.003 2.003 0 0 0 2.829 2.829" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M9.88 4.256C10.57 4.085 11.28 4 12 4c7 0 11 8 11 8a21.5 21.5 0 0 1-3.21 4.39" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M6.18 6.18C2.83 8.3 1 12 1 12s4 8 11 8c2.18 0 4.09-.74 5.73-1.86" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="confirmNewPassword">Confirm New Password</label>
+                                        <div class="password-input">
+                                            <input type="password" id="confirmNewPassword" required>
+                                            <button type="button" class="password-toggle" data-target="confirmNewPassword" aria-label="Show password">
+                                                <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                    <circle cx="12" cy="12" r="3" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
+                                                <svg class="icon-eye-off" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M3 3l18 18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M10.584 10.587a2.003 2.003 0 0 0 2.829 2.829" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M9.88 4.256C10.57 4.085 11.28 4 12 4c7 0 11 8 11 8a21.5 21.5 0 0 1-3.21 4.39" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                    <path d="M6.18 6.18C2.83 8.3 1 12 1 12s4 8 11 8c2.18 0 4.09-.74 5.73-1.86" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn">Change Password</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Order History Page -->
+                <div id="orderHistoryPage" class="order-history-page hidden">
+                    <div class="order-history-header">
+                        <button class="back-btn" onclick="showHome()">← Back to Home</button>
+                        <h2>Order History</h2>
+                    </div>
+                    
+                    <div class="order-history-container">
+                        <div id="orderHistoryList">
+                            <!-- Orders will be populated by JavaScript -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -355,8 +743,97 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Add/Edit Dish Modal -->
+    <div class="modal" id="dishModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="dishModalTitle">Add New Dish</h2>
+                <button class="close-btn" onclick="closeDishModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="dishForm">
+                    <input type="hidden" id="dishId">
+                    <div class="form-group">
+                        <label>Category Name *</label>
+                        <input type="text" id="dishCategory" placeholder="e.g., Main Course, Appetizers" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Dish Name *</label>
+                        <input type="text" id="dishName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description *</label>
+                        <textarea id="dishDescription" rows="3" required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Price (₹) *</label>
+                            <input type="number" id="dishPrice" min="0" step="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Vegetarian</label>
+                            <select id="dishVegetarian">
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Image URL (optional)</label>
+                        <input type="url" id="dishImage" placeholder="https://example.com/dish.jpg">
+                    </div>
+                    <button type="submit" class="btn">Save Dish</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Modal -->
+    <div class="modal" id="locationModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Set Delivery Location</h2>
+                <button class="close-btn" onclick="closeLocationModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="location-option">
+                    <button class="detect-location-btn" onclick="detectLocation()">
+                        <span class="btn-icon">🎯</span>
+                        <div>
+                            <div class="btn-title">Detect my location</div>
+                            <div class="btn-subtitle">Using GPS</div>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="location-divider">
+                    <span>OR</span>
+                </div>
+
+                <div class="location-option">
+                    <div class="input-group">
+                        <label>Enter delivery address</label>
+                        <input type="text" id="manualAddress" placeholder="Enter your complete address" class="location-input">
+                        <button class="btn-secondary" onclick="searchAddress()">Search</button>
+                    </div>
+                </div>
+
+                <div id="locationPreview" class="location-preview hidden">
+                    <h3>Selected Location</h3>
+                    <p id="selectedAddress"></p>
+                    <div class="location-coords">
+                        <small>Lat: <span id="selectedLat"></span>, Lon: <span id="selectedLon"></span></small>
+                    </div>
+                    <button class="btn-primary" onclick="saveLocation()">Confirm & Save</button>
+                </div>
+
+                <div id="locationError" class="error-message hidden"></div>
+            </div>
+        </div>
+    </div>
+
     <script src="js/data.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/owner.js"></script>
 </body>
 </html>

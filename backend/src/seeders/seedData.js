@@ -14,6 +14,11 @@ const restaurants = {
         cuisine: "American",
         rating: 4.5,
         deliveryTime: "25-30 min",
+        address: "MG Road, Connaught Place, New Delhi",
+        location: {
+            type: "Point",
+            coordinates: [77.2167, 28.6304] // [longitude, latitude] - Connaught Place, Delhi
+        },
         categories: [
             {
                 name: "Burgers",
@@ -40,6 +45,11 @@ const restaurants = {
         cuisine: "Italian",
         rating: 4.7,
         deliveryTime: "30-35 min",
+        address: "Sector 29, Gurgaon, Haryana",
+        location: {
+            type: "Point",
+            coordinates: [77.0688, 28.4595] // Gurgaon
+        },
         categories: [
             {
                 name: "Pizzas",
@@ -59,6 +69,11 @@ const restaurants = {
         cuisine: "Indian",
         rating: 4.6,
         deliveryTime: "35-40 min",
+        address: "Karol Bagh, Central Delhi",
+        location: {
+            type: "Point",
+            coordinates: [77.1925, 28.6519] // Karol Bagh, Delhi
+        },
         categories: [
             {
                 name: "Main Course",

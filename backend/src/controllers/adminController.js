@@ -234,3 +234,110 @@ exports.getAllUsers = async (req, res) => {
         });
     }
 };
+
+// Get pending restaurant applications
+exports.getPendingRestaurants = async (req, res) => {
+    try {
+        const pendingRestaurants = await Restaurant.find({ isApproved: false })
+            .populate('ownerId', 'name email mobile')
+            .sort('-createdAt');
+
+        res.json({
+            success: true,
+            count: pendingRestaurants.length,
+            data: pendingRestaurants
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Approve restaurant
+exports.approveRestaurant = async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+
+        const restaurant = await Restaurant.findById(restaurantId);
+
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+
+        restaurant.isApproved = true;
+        await restaurant.save();
+
+        res.json({
+            success: true,
+            message: 'Restaurant approved successfully',
+            data: restaurant
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Reject restaurant
+exports.rejectRestaurant = async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { reason } = req.body;
+
+        const restaurant = await Restaurant.findById(restaurantId).populate('ownerId');
+
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+
+        // Delete the restaurant
+        await Restaurant.findByIdAndDelete(restaurantId);
+
+        // Delete the owner user account
+        if (restaurant.ownerId) {
+            await User.findByIdAndDelete(restaurant.ownerId._id);
+        }
+
+        res.json({
+            success: true,
+            message: 'Restaurant application rejected and removed',
+            reason: reason || 'No reason provided'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Get all restaurants (approved and pending)
+exports.getAllRestaurants = async (req, res) => {
+    try {
+        const restaurants = await Restaurant.find()
+            .populate('ownerId', 'name email mobile')
+            .sort('-createdAt');
+
+        res.json({
+            success: true,
+            count: restaurants.length,
+            data: restaurants
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+

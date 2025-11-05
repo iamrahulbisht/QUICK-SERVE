@@ -15,6 +15,8 @@ app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/restaurants', require('./src/routes/restaurantRoutes'));
 app.use('/api/orders', require('./src/routes/orderRoutes'));
 app.use('/api/admin', require('./src/routes/adminRoutes'));
+app.use('/api/location', require('./src/routes/locationRoutes'));
+app.use('/api/restaurant-owner', require('./src/routes/restaurantOwnerRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) => {

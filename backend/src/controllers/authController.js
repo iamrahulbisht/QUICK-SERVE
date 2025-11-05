@@ -117,3 +117,67 @@ exports.getMe = async (req, res) => {
         user: req.user
     });
 };
+
+// Update user profile
+exports.updateProfile = async (req, res) => {
+    try {
+        const { name, email, mobile, currentPassword, newPassword } = req.body;
+
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        // Check if email or username is being changed and if it's already taken
+        if (email && email !== user.email) {
+            const emailExists = await User.findOne({ email });
+            if (emailExists) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email already in use'
+                });
+            }
+        }
+
+        // Update basic info
+        if (name) user.name = name;
+        if (email) user.email = email;
+        if (mobile) user.mobile = mobile;
+
+        // Handle password change
+        if (currentPassword && newPassword) {
+            const isMatch = await user.comparePassword(currentPassword);
+            if (!isMatch) {
+                return res.status(401).json({
+                    success: false,
+                    error: 'Current password is incorrect'
+                });
+            }
+            user.password = newPassword;
+        }
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                username: user.username,
+                mobile: user.mobile,
+                role: user.role
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+};

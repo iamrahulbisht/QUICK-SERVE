@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+﻿const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // Protect routes - verify JWT token
@@ -44,6 +44,18 @@ exports.admin = (req, res, next) => {
         res.status(403).json({
             success: false,
             message: 'Access denied. Admin only.'
+        });
+    }
+};
+
+// Check if user is restaurant owner
+exports.isRestaurantOwner = (req, res, next) => {
+    if (req.user && req.user.role === 'restaurantOwner') {
+        next();
+    } else {
+        res.status(403).json({
+            success: false,
+            message: 'Access denied. Restaurant owners only.'
         });
     }
 };

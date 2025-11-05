@@ -1,5 +1,6 @@
 const Restaurant = require('../models/Restaurant');
 const Order = require('../models/Order');
+const { calculateDistance, calculateDeliveryFee, estimateDeliveryTime } = require('../utils/locationUtils');
 
 const generateOrderId = () => `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 const ALLOWED_PAYMENT_METHODS = ['cod', 'card', 'upi'];
@@ -83,7 +84,7 @@ exports.createOrder = async (req, res) => {
             });
         }
 
-        const { items, address, paymentMethod } = req.body;
+        const { items, address, paymentMethod, latitude, longitude, mode, tableNumber } = req.body;
 
         if (!Array.isArray(items) || items.length === 0) {
             return res.status(400).json({
@@ -92,10 +93,20 @@ exports.createOrder = async (req, res) => {
             });
         }
 
-        if (!address) {
+        // Validate based on mode
+        const orderMode = mode || 'delivery';
+        
+        if (orderMode === 'delivery' && !address) {
             return res.status(400).json({
                 success: false,
-                message: 'Delivery address is required'
+                message: 'Delivery address is required for delivery orders'
+            });
+        }
+
+        if (orderMode === 'dinein' && !tableNumber) {
+            return res.status(400).json({
+                success: false,
+                message: 'Table number is required for dine-in orders'
             });
         }
 
@@ -168,10 +179,42 @@ exports.createOrder = async (req, res) => {
 
         const validatedItems = Array.from(itemMap.values());
         const subtotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const deliveryFee = 40;
+        
+        // Calculate delivery fee based on mode and location
+        let deliveryFee = 0;
+        let distance = 0;
+        let estimatedTime = '15-20 mins';
+        let deliveryLocation = { type: 'Point', coordinates: [0, 0] };
+
+        if (orderMode === 'delivery') {
+            deliveryFee = 40; // Default delivery fee
+            estimatedTime = '30-40 mins';
+
+            if (latitude && longitude) {
+                const firstRestaurantId = validatedItems[0].restaurantId;
+                const restaurant = restaurantCache.get(firstRestaurantId);
+
+                if (restaurant && restaurant.location && restaurant.location.coordinates && 
+                    (restaurant.location.coordinates[0] !== 0 || restaurant.location.coordinates[1] !== 0)) {
+                    const [restLon, restLat] = restaurant.location.coordinates;
+                    distance = calculateDistance(restLat, restLon, latitude, longitude);
+                    deliveryFee = calculateDeliveryFee(distance);
+                    estimatedTime = estimateDeliveryTime(distance);
+                }
+
+                deliveryLocation = {
+                    type: 'Point',
+                    coordinates: [longitude, latitude]
+                };
+            }
+        } else {
+            // Dine-in mode - no delivery fee
+            estimatedTime = '15-20 mins';
+        }
+
         const total = subtotal + deliveryFee;
 
-        const order = await Order.create({
+        const orderData = {
             orderId: generateOrderId(),
             userId: req.user._id,
             userEmail: req.user.email,
@@ -179,9 +222,22 @@ exports.createOrder = async (req, res) => {
             subtotal,
             deliveryFee,
             total,
-            address,
-            paymentMethod: normalizedPaymentMethod
-        });
+            paymentMethod: normalizedPaymentMethod,
+            mode: orderMode
+        };
+
+        // Add mode-specific fields
+        if (orderMode === 'delivery') {
+            orderData.address = address;
+            orderData.deliveryLocation = deliveryLocation;
+            orderData.distance = distance;
+            orderData.estimatedDeliveryTime = estimatedTime;
+        } else {
+            orderData.tableNumber = tableNumber;
+            orderData.estimatedDeliveryTime = estimatedTime;
+        }
+
+        const order = await Order.create(orderData);
 
         res.status(201).json({
             success: true,
