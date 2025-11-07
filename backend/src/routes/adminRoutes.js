@@ -3,7 +3,8 @@ const router = express.Router();
 const { 
     getStats, 
     getAllOrders, 
-    updateOrderStatus, 
+    updateOrderStatus,
+    deleteAllOrders,
     getAllUsers, 
     updateUserRole,
     toggleUserStatus,
@@ -23,6 +24,7 @@ const { protect, admin } = require('../middleware/auth');
 router.get('/stats', protect, admin, getStats);
 router.get('/orders', protect, admin, getAllOrders);
 router.patch('/orders/:orderId/status', protect, admin, updateOrderStatus);
+router.delete('/orders', protect, admin, deleteAllOrders);
 
 // User routes
 router.get('/users', protect, admin, getAllUsers);

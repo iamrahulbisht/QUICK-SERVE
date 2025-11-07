@@ -708,4 +708,23 @@ exports.deleteRestaurant = async (req, res) => {
     }
 };
 
+// Delete all orders (reset orders/purchases)
+exports.deleteAllOrders = async (req, res) => {
+    try {
+        const result = await Order.deleteMany({});
+        
+        res.json({
+            success: true,
+            message: `All orders deleted successfully. ${result.deletedCount} orders removed.`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error('Error deleting all orders:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 

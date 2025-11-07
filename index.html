@@ -646,7 +646,12 @@
 
                     <!-- Orders Section -->
                     <div id="adminOrders" class="admin-section">
-                        <h3>All Orders</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3>All Orders</h3>
+                            <button onclick="deleteAllOrders()" class="btn" style="background: #dc3545; padding: 8px 16px; font-size: 14px;">
+                                Delete All Orders
+                            </button>
+                        </div>
                         <table class="orders-table" id="ordersTable">
                             <thead>
                                 <tr>

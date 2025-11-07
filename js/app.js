@@ -1476,6 +1476,35 @@ async function renderAdminOrders() {
     }
 }
 
+// Delete all orders
+async function deleteAllOrders() {
+    if (!confirm('WARNING: This will delete ALL orders and purchases from the system.\n\nThis action cannot be undone. Are you sure?')) {
+        return;
+    }
+    
+    const confirmText = prompt('Type "DELETE ALL ORDERS" to confirm:');
+    
+    if (confirmText !== 'DELETE ALL ORDERS') {
+        alert('Deletion cancelled');
+        return;
+    }
+    
+    try {
+        const data = await apiCall('/admin/orders', {
+            method: 'DELETE'
+        });
+        
+        if (data.success) {
+            alert(`Success! ${data.deletedCount} orders deleted. System reset to fresh state.`);
+            renderAdminOrders();
+            renderAdminStats();
+        }
+    } catch (error) {
+        console.error('Error deleting all orders:', error);
+        alert('Failed to delete orders: ' + error.message);
+    }
+}
+
 // Admin Users Management
 let allUsersData = [];
 let currentUserFilter = { role: 'all', status: 'all' };
@@ -2840,6 +2869,9 @@ window.openEditUserRole = openEditUserRole;
 window.closeEditUserRoleModal = closeEditUserRoleModal;
 window.toggleUserStatus = toggleUserStatus;
 window.deleteUser = deleteUser;
+
+// Make order management functions globally available
+window.deleteAllOrders = deleteAllOrders;
 
 // Google Maps Autocomplete initialization
 let autocomplete;
