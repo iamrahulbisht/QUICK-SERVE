@@ -23,6 +23,7 @@ let selectedTableNumber = null;
 let orders = [];
 let users = [];
 let userLocation = JSON.parse(localStorage.getItem('userLocation')) || null;
+let restaurantBackendMap = {}; // Maps frontend restaurant ids to backend ids
 
 const apiCall = async (endpoint, options = {}) => {
     const headers = {
@@ -80,10 +81,16 @@ function showSignup() {
 
 async function login(identifier, password, selectedRole, rememberMe) {
     try {
+        console.log('=== LOGIN ATTEMPT ===');
+        console.log('Identifier:', identifier);
+        console.log('Role Selected:', selectedRole);
+        
         const data = await apiCall('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ identifier, password, role: selectedRole })
         });
+        
+        console.log('Login response:', data);
         
         if (data.success) {
             authToken = data.token;
@@ -136,6 +143,9 @@ async function login(identifier, password, selectedRole, rememberMe) {
             return { success: true };
         }
     } catch (error) {
+        console.error('=== LOGIN ERROR ===');
+        console.error('Error:', error);
+        console.error('Error message:', error.message);
         return { success: false, error: error.message };
     }
 }
@@ -284,25 +294,125 @@ function logout() {
 }
 
 // Load restaurants from API
+function initializeStaticRestaurantData() {
+    if (!window.restaurants) {
+        window.restaurants = {};
+        return;
+    }
+
+    Object.entries(restaurants).forEach(([key, restaurant]) => {
+        if (!restaurant) return;
+
+        if (!restaurant.backendId) {
+            restaurant.backendId = key;
+        }
+
+        (restaurant.categories || []).forEach(category => {
+            (category.items || []).forEach(item => {
+                if (!item.backendId) {
+                    item.backendId = item.id;
+                }
+            });
+        });
+    });
+}
+
+initializeStaticRestaurantData();
+
+function generateFrontendRestaurantId(backendId) {
+    if (!backendId) return '';
+    if (backendId.includes('-')) {
+        return backendId.toLowerCase();
+    }
+    return backendId.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+function normalizeRestaurantData(restaurant) {
+    if (!restaurant) return null;
+
+    const backendId = restaurant.id || restaurant._id || restaurant.backendId;
+    const frontendId = generateFrontendRestaurantId(backendId);
+
+    const normalizedCategories = (restaurant.categories || []).map(category => ({
+        name: category.name,
+        items: (category.items || []).map(item => {
+            const backendItemId = item.id || item.backendId;
+            return {
+                id: backendItemId,
+                backendId: backendItemId,
+                name: item.name,
+                description: item.description,
+                price: Number(item.price) || 0,
+                image: item.image,
+                vegetarian: Boolean(item.vegetarian)
+            };
+        })
+    }));
+
+    const normalized = {
+        ...restaurant,
+        id: frontendId,
+        backendId,
+        name: restaurant.name,
+        emoji: restaurant.emoji || '🍽️',
+        cuisine: restaurant.cuisine || 'Multi-Cuisine',
+        rating: restaurant.rating || 4.5,
+        deliveryTime: restaurant.deliveryTime || '30-40 mins',
+        categories: normalizedCategories
+    };
+
+    normalized.logo = convertGoogleDriveUrlForDisplay(restaurant.logo || restaurant.cardImage || '');
+    normalized.cardImage = convertGoogleDriveUrlForDisplay(restaurant.cardImage || restaurant.logo || '');
+
+    return normalized;
+}
+
 async function loadRestaurants() {
     try {
         console.log('Loading restaurants from API...');
         const data = await apiCall('/restaurants');
         if (data.success && data.data) {
             console.log('Restaurants loaded:', data.data.length);
-            // Convert array to object format for compatibility
-            const restaurantsObj = {};
+            // Reset current restaurants map and backend map
+            Object.keys(restaurants).forEach(key => delete restaurants[key]);
+            restaurantBackendMap = {};
+
             data.data.forEach(restaurant => {
-                console.log('Restaurant:', restaurant.name, 'Categories:', restaurant.categories?.length || 0);
-                restaurantsObj[restaurant.id] = restaurant;
+                const normalized = normalizeRestaurantData(restaurant);
+                if (!normalized) return;
+
+                restaurants[normalized.id] = normalized;
+                restaurantBackendMap[normalized.id] = normalized.backendId;
+                console.log('Restaurant:', normalized.name, 'Categories:', normalized.categories?.length || 0);
             });
-            Object.assign(restaurants, restaurantsObj);
             console.log('Total restaurants in object:', Object.keys(restaurants).length);
         }
     } catch (error) {
         console.error('Error loading restaurants:', error);
         // Fall back to local data if API fails
     }
+}
+
+// Convert Google Drive URL for display (copied from owner.js for use in app.js)
+function convertGoogleDriveUrlForDisplay(url) {
+    if (!url) return url;
+    
+    // Check if it's a Google Drive link
+    const drivePatterns = [
+        /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?.*id=([a-zA-Z0-9_-]+)/
+    ];
+    
+    for (const pattern of drivePatterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            const fileId = match[1];
+            return `https://lh3.googleusercontent.com/d/${fileId}`;
+        }
+    }
+    
+    return url;
 }
 
 // Page Navigation
@@ -630,7 +740,7 @@ function addToCart(itemId) {
         cart.push({
             itemId: item.id,
             itemName: item.name,
-            restaurantId: currentRestaurant.id,
+            restaurantId: currentRestaurant.backendId,
             restaurantName: currentRestaurant.name,
             price: item.price,
             quantity: 1,
@@ -719,17 +829,17 @@ function renderCartItems() {
     cartSummaryDiv.innerHTML = `
         <div class="summary-row">
             <span>Subtotal</span>
-            <span>₹${subtotal}</span>
+            <span>₹${subtotal.toFixed(2)}</span>
         </div>
         ${!isDineInMode() ? `
         <div class="summary-row">
             <span>Delivery Fee</span>
-            <span>₹${deliveryFee}</span>
+            <span>₹${deliveryFee.toFixed(2)}</span>
         </div>
         ` : ''}
         <div class="summary-row total">
             <span>Total</span>
-            <span>₹${total}</span>
+            <span>₹${total.toFixed(2)}</span>
         </div>
     `;
 }
@@ -759,7 +869,7 @@ function renderCheckoutSummary() {
         itemsHtml += `
             <div class="summary-row">
                 <span>${item.itemName} × ${item.quantity}</span>
-                <span>₹${item.price * item.quantity}</span>
+                <span>₹${(item.price * item.quantity).toFixed(2)}</span>
             </div>
         `;
     });
@@ -925,62 +1035,17 @@ async function placeOrder() {
     }
 
     try {
-        // Log the cart items for debugging
-        console.log('Cart items before formatting:', cart);
-        
-        // Map of restaurant IDs to their correct format
-        const restaurantIdMap = {
-            'burger-palace': 'burgerPalace',
-            'pizza-corner': 'pizzaCorner',
-            'spice-of-india': 'spiceOfIndia'
-        };
-
-        // Map of item IDs to their correct format for each restaurant
-        const itemIdMap = {
-            'burgerPalace': {
-                'bp001': 'bp1',
-                'bp002': 'bp2',
-                'bp003': 'bp3',
-                'bp004': 'bp4',
-                'bp005': 'bp5'
-            },
-            'pizzaCorner': {
-                'pc001': 'pc1',
-                'pc002': 'pc2',
-                'pc003': 'pc3'
-            },
-            'spiceOfIndia': {
-                'si001': 'si1',
-                'si002': 'si2',
-                'si003': 'si3',
-                'si004': 'si4',
-                'si005': 'si5'
-            }
-        };
-        
-        // Prepare cart items with properly formatted IDs
-        const formattedCart = cart.map(item => {
-            // Get the correct restaurant ID format
-            const restaurantId = restaurantIdMap[item.restaurantId] || item.restaurantId;
-            
-            // Get the correct item ID format for this restaurant
-            const itemIdMapForRestaurant = itemIdMap[restaurantId] || {};
-            const itemId = itemIdMapForRestaurant[item.itemId] || item.itemId;
-            
-            console.log(`Converting: ${item.restaurantId}:${item.itemId} -> ${restaurantId}:${itemId}`);
-            
-            return {
-                ...item,
-                itemId: itemId,
-                restaurantId: restaurantId
-            };
-        });
-
-        console.log('Formatted cart items:', formattedCart);
-        
         // Prepare order data
+        const orderItems = cart.map(item => ({
+            itemId: item.itemId,
+            quantity: item.quantity,
+            restaurantId: item.restaurantId
+        }));
+
+        console.log('Formatted cart items:', orderItems);
+
         const orderData = {
-            items: formattedCart,
+            items: orderItems,
             paymentMethod
         };
         
@@ -1039,32 +1104,6 @@ function scrollToCategory(categoryName) {
     if (element) {
         element.scrollIntoView({ behavior: 'smooth' });
     }
-}
-
-// Admin Functions
-function showAdminDashboard() {
-    if (!currentUser || currentUser.role !== 'admin') {
-        alert('Access denied. Admin only.');
-        return;
-    }
-    
-    document.getElementById('homePage').classList.add('hidden');
-    document.getElementById('menuPage').classList.add('hidden');
-    document.getElementById('checkoutPage').classList.add('hidden');
-    document.getElementById('successPage').classList.add('hidden');
-    document.getElementById('adminPage').classList.remove('hidden');
-    document.getElementById('profilePage').classList.add('hidden');
-    document.getElementById('orderHistoryPage').classList.add('hidden');
-    document.getElementById('userDropdown').classList.remove('show');
-    const adminBackButton = document.querySelector('#adminPage .btn');
-    if (adminBackButton) {
-        adminBackButton.textContent = 'Logout';
-        adminBackButton.onclick = logout;
-    }
-    
-    renderAdminStats();
-    renderAdminOrders();
-    switchAdminTab('orders', null);
 }
 
 // Profile Functions
@@ -1173,6 +1212,26 @@ async function changePassword(event) {
 
 // Order History Functions
 async function showOrderHistory() {
+    // Redirect restaurant owners to their dashboard
+    if (currentUser && currentUser.role === 'restaurantOwner') {
+        console.log('Restaurant owners should use the owner dashboard for orders');
+        // Show the orders tab in owner dashboard
+        document.getElementById('restaurantOwnerDashboard').classList.remove('hidden');
+        document.getElementById('homePage').classList.add('hidden');
+        document.getElementById('menuPage').classList.add('hidden');
+        document.getElementById('checkoutPage').classList.add('hidden');
+        document.getElementById('successPage').classList.add('hidden');
+        document.getElementById('adminPage').classList.add('hidden');
+        document.getElementById('profilePage').classList.add('hidden');
+        document.getElementById('orderHistoryPage').classList.add('hidden');
+        
+        // Switch to orders tab in owner dashboard
+        if (typeof showOwnerDashboardTab === 'function') {
+            showOwnerDashboardTab('orders');
+        }
+        return;
+    }
+    
     document.getElementById('homePage').classList.add('hidden');
     document.getElementById('menuPage').classList.add('hidden');
     document.getElementById('checkoutPage').classList.add('hidden');
@@ -1333,7 +1392,7 @@ function switchAdminTab(tab, evt) {
         renderAdminUsers();
     } else if (tab === 'restaurants') {
         document.getElementById('adminRestaurants').classList.remove('hidden');
-        loadRestaurantApprovals();
+        loadRestaurantManagement();
     }
 }
 
@@ -1417,26 +1476,310 @@ async function renderAdminOrders() {
     }
 }
 
+// Admin Users Management
+let allUsersData = [];
+let currentUserFilter = { role: 'all', status: 'all' };
+
 async function renderAdminUsers() {
     try {
         const data = await apiCall('/admin/users');
-        const tbody = document.getElementById('usersTableBody');
-        tbody.innerHTML = '';
         
         if (data.success && data.data) {
-            data.data.forEach(user => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${user.name}</td>
-                    <td>${user.email}</td>
-                    <td>${user.role === 'admin' ? '<span class="status-badge status-preparing">Admin</span>' : '<span class="status-badge status-placed">Customer</span>'}</td>
-                    <td>${user.orderCount || 0}</td>
-                `;
-                tbody.appendChild(row);
-            });
+            allUsersData = data.data;
+            updateUserStats(allUsersData);
+            renderUsersTable(allUsersData);
         }
     } catch (error) {
         console.error('Error loading users:', error);
+        const tbody = document.getElementById('usersTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: red; padding: 40px;">Error loading users</td></tr>';
+        }
+    }
+}
+
+function updateUserStats(users) {
+    const total = users.length;
+    const customers = users.filter(u => u.role === 'customer').length;
+    const owners = users.filter(u => u.role === 'restaurantOwner').length;
+    const admins = users.filter(u => u.role === 'admin').length;
+    
+    document.getElementById('totalUsersCount').textContent = total;
+    document.getElementById('customersCount').textContent = customers;
+    document.getElementById('ownersCount').textContent = owners;
+    document.getElementById('adminsCount').textContent = admins;
+}
+
+function renderUsersTable(users) {
+    const tbody = document.getElementById('usersTableBody');
+    const roleFilter = document.getElementById('userFilterRole')?.value || 'all';
+    const statusFilter = document.getElementById('userFilterStatus')?.value || 'all';
+    
+    // Filter users
+    let filteredUsers = users;
+    
+    if (roleFilter !== 'all') {
+        filteredUsers = filteredUsers.filter(u => u.role === roleFilter);
+    }
+    
+    if (statusFilter !== 'all') {
+        if (statusFilter === 'active') {
+            filteredUsers = filteredUsers.filter(u => !u.isSuspended);
+        } else if (statusFilter === 'suspended') {
+            filteredUsers = filteredUsers.filter(u => u.isSuspended);
+        }
+    }
+    
+    // Search filter
+    const searchInput = document.getElementById('userSearchInput');
+    if (searchInput && searchInput.value.trim()) {
+        const searchTerm = searchInput.value.toLowerCase();
+        filteredUsers = filteredUsers.filter(u => 
+            u.name.toLowerCase().includes(searchTerm) ||
+            u.email.toLowerCase().includes(searchTerm) ||
+            u.username?.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    if (filteredUsers.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-light);">
+                    <div style="font-size: 16px;">No users found</div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = filteredUsers.map(user => {
+        const isCurrentUser = currentUser && currentUser.email === user.email;
+        const isSuspended = user.isSuspended || false;
+        const orderCount = user.orderCount || 0;
+        const totalSpent = user.totalSpent || 0;
+        
+        // Role badge
+        let roleBadge = '';
+        switch(user.role) {
+            case 'admin':
+                roleBadge = '<span class="status-pill approved">Admin</span>';
+                break;
+            case 'restaurantOwner':
+                roleBadge = '<span class="status-pill active">Owner</span>';
+                break;
+            case 'customer':
+            default:
+                roleBadge = '<span class="status-pill pending">Customer</span>';
+                break;
+        }
+        
+        // Status badge
+        const statusBadge = isSuspended 
+            ? '<span class="status-pill inactive">Suspended</span>' 
+            : '<span class="status-pill active">Active</span>';
+        
+        const joinedDate = new Date(user.createdAt).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+        
+        return `
+            <tr>
+                <td>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="font-weight: 500;">${user.name}${isCurrentUser ? ' (You)' : ''}</div>
+                        <div style="font-size: 12px; color: var(--text-light);">${user.email}</div>
+                        ${user.mobile ? `<div style="font-size: 12px; color: var(--text-light);">${user.mobile}</div>` : ''}
+                    </div>
+                </td>
+                <td>${roleBadge}</td>
+                <td>${statusBadge}</td>
+                <td><strong>${orderCount}</strong></td>
+                <td><strong>₹${totalSpent}</strong></td>
+                <td>${joinedDate}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="action-btn-small view" onclick="viewUserDetails('${user._id}')">
+                            View
+                        </button>
+                        ${!isCurrentUser ? `
+                            <button class="action-btn-small edit" onclick="openEditUserRole('${user._id}')">
+                                Change Role
+                            </button>
+                            <button class="action-btn-small toggle ${isSuspended ? '' : 'active'}" onclick="toggleUserStatus('${user._id}', ${!isSuspended})">
+                                ${isSuspended ? 'Activate' : 'Suspend'}
+                            </button>
+                            <button class="action-btn-small delete" onclick="deleteUser('${user._id}', '${user.name}')">
+                                Delete
+                            </button>
+                        ` : '<span style="color: var(--text-light); font-size: 12px;">Current User</span>'}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// View User Details
+async function viewUserDetails(userId) {
+    try {
+        const user = allUsersData.find(u => u._id === userId);
+        
+        if (!user) {
+            alert('User not found');
+            return;
+        }
+        
+        const modal = document.getElementById('userDetailsModal');
+        const body = document.getElementById('userDetailsBody');
+        
+        // Role display
+        let roleDisplay = user.role;
+        if (user.role === 'restaurantOwner') roleDisplay = 'Restaurant Owner';
+        else if (user.role === 'admin') roleDisplay = 'Admin';
+        else roleDisplay = 'Customer';
+        
+        body.innerHTML = `
+            <div class="details-grid">
+                <div class="detail-item">
+                    <div class="detail-label">Full Name</div>
+                    <div class="detail-value">${user.name}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Email Address</div>
+                    <div class="detail-value">${user.email}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Username</div>
+                    <div class="detail-value">${user.username || 'N/A'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Mobile Number</div>
+                    <div class="detail-value">${user.mobile || 'N/A'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Role</div>
+                    <div class="detail-value">${roleDisplay}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Account Status</div>
+                    <div class="detail-value">
+                        <span class="status-pill ${user.isSuspended ? 'inactive' : 'active'}">
+                            ${user.isSuspended ? 'Suspended' : 'Active'}
+                        </span>
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Total Orders</div>
+                    <div class="detail-value">${user.orderCount || 0}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Total Spent</div>
+                    <div class="detail-value">₹${user.totalSpent || 0}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Member Since</div>
+                    <div class="detail-value">${new Date(user.createdAt).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    })}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Last Updated</div>
+                    <div class="detail-value">${new Date(user.updatedAt).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })}</div>
+                </div>
+            </div>
+        `;
+        
+        modal.classList.add('active');
+    } catch (error) {
+        console.error('Error loading user details:', error);
+        alert('Failed to load user details');
+    }
+}
+
+function closeUserDetailsModal() {
+    document.getElementById('userDetailsModal').classList.remove('active');
+}
+
+// Edit User Role
+function openEditUserRole(userId) {
+    const user = allUsersData.find(u => u._id === userId);
+    
+    if (!user) {
+        alert('User not found');
+        return;
+    }
+    
+    document.getElementById('editUserId').value = userId;
+    document.getElementById('editUserName').value = `${user.name} (${user.email})`;
+    document.getElementById('editUserRole').value = user.role;
+    
+    document.getElementById('editUserRoleModal').classList.add('active');
+}
+
+function closeEditUserRoleModal() {
+    document.getElementById('editUserRoleModal').classList.remove('active');
+    document.getElementById('editUserRoleForm').reset();
+}
+
+// Toggle User Status (Suspend/Activate)
+async function toggleUserStatus(userId, suspend) {
+    const action = suspend ? 'suspend' : 'activate';
+    
+    if (!confirm(`Are you sure you want to ${action} this user?`)) {
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/admin/users/${userId}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ isSuspended: suspend })
+        });
+        
+        if (data.success) {
+            alert(`User ${action}d successfully!`);
+            renderAdminUsers();
+        }
+    } catch (error) {
+        console.error(`Error ${action}ing user:`, error);
+        alert(`Failed to ${action} user: ` + error.message);
+    }
+}
+
+// Delete User
+async function deleteUser(userId, userName) {
+    if (!confirm(`WARNING: Delete user "${userName}"?\n\nThis will permanently delete the user and all associated data. This action cannot be undone.`)) {
+        return;
+    }
+    
+    const confirmText = prompt('Type "DELETE" to confirm deletion:');
+    
+    if (confirmText !== 'DELETE') {
+        alert('Deletion cancelled');
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/admin/users/${userId}`, {
+            method: 'DELETE'
+        });
+        
+        if (data.success) {
+            alert('User deleted successfully');
+            renderAdminUsers();
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Failed to delete user: ' + error.message);
     }
 }
 
@@ -1455,6 +1798,39 @@ async function updateOrderStatus(orderId, newStatus) {
         alert('Error updating order status: ' + error.message);
     }
 }
+
+async function changeUserRole(userId, newRole) {
+    if (!newRole) {
+        return; // No role selected
+    }
+    
+    if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
+        // Reset the dropdown
+        event.target.value = '';
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/admin/users/${userId}/role`, {
+            method: 'PATCH',
+            body: JSON.stringify({ role: newRole })
+        });
+        
+        if (data.success) {
+            alert('User role updated successfully!');
+            await renderAdminUsers();
+        } else {
+            alert('Failed to update user role: ' + (data.message || 'Unknown error'));
+            event.target.value = '';
+        }
+    } catch (error) {
+        alert('Error updating user role: ' + error.message);
+        event.target.value = '';
+    }
+}
+
+// Make changeUserRole globally accessible
+window.changeUserRole = changeUserRole;
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', function() {
@@ -1493,8 +1869,10 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('loginError').classList.add('hidden');
         } else {
             const errorDiv = document.getElementById('loginError');
-            errorDiv.textContent = result.error;
+            errorDiv.textContent = result.error || 'Login failed. Please check your credentials and selected role.';
             errorDiv.classList.remove('hidden');
+            
+            console.error('Login failed:', result.error);
         }
     });
 
@@ -1968,109 +2346,298 @@ function getDineInTable() {
     return dineInMode.tableNumber;
 }
 
-// Restaurant Approval Functions
-async function loadRestaurantApprovals() {
-    try {
-        const [pendingData, approvedData] = await Promise.all([
-            apiCall('/admin/restaurants/pending'),
-            apiCall('/admin/restaurants')
-        ]);
+// Restaurant Management Functions
+let allRestaurantsData = [];
+let currentRestaurantFilter = 'all';
 
-        if (pendingData.success) {
-            const pending = pendingData.data || [];
-            const approved = approvedData.success ? approvedData.data.filter(r => r.isApproved) : [];
-            
-            document.getElementById('pendingCount').textContent = pending.length;
-            document.getElementById('approvedCount').textContent = approved.length;
-            
-            renderRestaurantApprovals(pending, 'pendingRestaurants');
-            renderRestaurantApprovals(approved, 'approvedRestaurants');
+async function loadRestaurantManagement() {
+    try {
+        const filterStatus = document.getElementById('restaurantFilterStatus')?.value || 'all';
+        currentRestaurantFilter = filterStatus;
+        
+        const data = await apiCall('/admin/restaurants/management');
+        
+        if (data.success) {
+            allRestaurantsData = data.data || [];
+            updateRestaurantStats(allRestaurantsData);
+            renderRestaurantsTable(allRestaurantsData);
         }
     } catch (error) {
-        console.error('Error loading restaurant approvals:', error);
-        showToast('Failed to load restaurant approvals', 'error');
+        console.error('Error loading restaurants:', error);
+        const tbody = document.getElementById('restaurantsTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red; padding: 40px;">Error loading restaurants</td></tr>';
+        }
     }
 }
 
-function renderRestaurantApprovals(restaurants, containerId) {
-    const container = document.getElementById(containerId);
+function updateRestaurantStats(restaurants) {
+    const total = restaurants.length;
+    const pending = restaurants.filter(r => !r.isApproved).length;
+    const approved = restaurants.filter(r => r.isApproved).length;
+    const active = restaurants.filter(r => r.isActive).length;
+    const inactive = restaurants.filter(r => !r.isActive).length;
     
-    if (!restaurants || restaurants.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">🏪</div>
-                <div class="empty-state-text">No restaurants found</div>
-            </div>
+    document.getElementById('totalRestaurantsCount').textContent = total;
+    document.getElementById('pendingRestaurantsCount').textContent = pending;
+    document.getElementById('activeRestaurantsCount').textContent = active;
+    document.getElementById('inactiveRestaurantsCount').textContent = inactive;
+}
+
+function renderRestaurantsTable(restaurants) {
+    const tbody = document.getElementById('restaurantsTableBody');
+    const filterStatus = currentRestaurantFilter;
+    
+    // Filter restaurants based on status
+    let filteredRestaurants = restaurants;
+    if (filterStatus === 'pending') {
+        filteredRestaurants = restaurants.filter(r => !r.isApproved);
+    } else if (filterStatus === 'approved') {
+        filteredRestaurants = restaurants.filter(r => r.isApproved);
+    } else if (filterStatus === 'active') {
+        filteredRestaurants = restaurants.filter(r => r.isActive);
+    } else if (filterStatus === 'inactive') {
+        filteredRestaurants = restaurants.filter(r => !r.isActive);
+    }
+    
+    // Search filter
+    const searchInput = document.getElementById('restaurantSearchInput');
+    if (searchInput && searchInput.value.trim()) {
+        const searchTerm = searchInput.value.toLowerCase();
+        filteredRestaurants = filteredRestaurants.filter(r => 
+            r.name.toLowerCase().includes(searchTerm) ||
+            r.cuisine.toLowerCase().includes(searchTerm) ||
+            r.address?.toLowerCase().includes(searchTerm) ||
+            r.ownerId?.name?.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    if (filteredRestaurants.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-light);">
+                    <div style="font-size: 16px;">No restaurants found</div>
+                </td>
+            </tr>
         `;
         return;
     }
     
-    container.innerHTML = restaurants.map(restaurant => `
-        <div class="restaurant-approval-card">
-            <h4>${restaurant.name}</h4>
-            <div class="restaurant-info">
-                <div class="info-row">
-                    <span class="info-label">Owner:</span>
-                    <span class="info-value">${restaurant.ownerId?.name || 'N/A'}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Email:</span>
-                    <span class="info-value">${restaurant.ownerId?.email || 'N/A'}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Phone:</span>
-                    <span class="info-value">${restaurant.ownerId?.mobile || 'N/A'}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Cuisine:</span>
-                    <span class="info-value">${restaurant.cuisine || 'N/A'}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Address:</span>
-                    <span class="info-value">${restaurant.address || 'N/A'}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Tables:</span>
-                    <span class="info-value">${restaurant.totalTables || 'N/A'}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Status:</span>
-                    <span class="info-value">
-                        <span class="status-badge ${restaurant.isApproved ? 'status-approved' : 'status-pending'}">
-                            ${restaurant.isApproved ? 'Approved' : 'Pending'}
-                        </span>
-                    </span>
-                </div>
-            </div>
-            ${!restaurant.isApproved ? `
-                <div class="approval-actions">
-                    <button class="btn-approve" onclick="approveRestaurant('${restaurant._id}')">
-                        ✓ Approve
-                    </button>
-                    <button class="btn-reject" onclick="rejectRestaurant('${restaurant._id}', '${restaurant.name}')">
-                        ✗ Reject
-                    </button>
-                </div>
-            ` : ''}
-        </div>
-    `).join('');
+    tbody.innerHTML = filteredRestaurants.map(restaurant => {
+        const ownerName = restaurant.ownerId?.name || 'Unknown';
+        const ownerEmail = restaurant.ownerId?.email || 'N/A';
+        const stats = restaurant.stats || {};
+        const totalOrders = stats.totalOrders || 0;
+        const totalRevenue = stats.totalRevenue || 0;
+        const avgRating = restaurant.rating || 4.0;
+        
+        // Determine status
+        let statusClass = '';
+        let statusText = '';
+        if (!restaurant.isApproved) {
+            statusClass = 'pending';
+            statusText = 'Pending';
+        } else if (restaurant.isActive) {
+            statusClass = 'active';
+            statusText = 'Active';
+        } else {
+            statusClass = 'inactive';
+            statusText = 'Inactive';
+        }
+        
+        return `
+            <tr>
+                <td>
+                    <div class="restaurant-info">
+                        <div class="restaurant-logo">${restaurant.emoji || '🍽️'}</div>
+                        <div class="restaurant-name-block">
+                            <div class="restaurant-name">${restaurant.name}</div>
+                            <div class="restaurant-address">${restaurant.address || 'N/A'}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div style="font-weight: 500;">${ownerName}</div>
+                    <div style="font-size: 12px; color: var(--text-light);">${ownerEmail}</div>
+                </td>
+                <td>${restaurant.cuisine || 'N/A'}</td>
+                <td><span class="status-pill ${statusClass}">${statusText}</span></td>
+                <td><strong>${totalOrders}</strong></td>
+                <td><strong>₹${totalRevenue}</strong></td>
+                <td>${avgRating.toFixed(1)}</td>
+                <td>
+                    <div class="action-buttons">
+                        ${!restaurant.isApproved ? `
+                            <button class="action-btn-small approve" onclick="approveRestaurant('${restaurant._id}')">
+                                Approve
+                            </button>
+                            <button class="action-btn-small reject" onclick="rejectRestaurant('${restaurant._id}', '${restaurant.name}')">
+                                Reject
+                            </button>
+                        ` : ''}
+                        <button class="action-btn-small view" onclick="viewRestaurantDetails('${restaurant._id}')">
+                            View
+                        </button>
+                        <button class="action-btn-small edit" onclick="editRestaurant('${restaurant._id}')">
+                            Edit
+                        </button>
+                        ${restaurant.isApproved ? `
+                            <button class="action-btn-small toggle ${restaurant.isActive ? 'active' : ''}" onclick="toggleRestaurantStatus('${restaurant._id}', ${!restaurant.isActive})">
+                                ${restaurant.isActive ? 'Deactivate' : 'Activate'}
+                            </button>
+                        ` : ''}
+                        <button class="action-btn-small delete" onclick="deleteRestaurant('${restaurant._id}', '${restaurant.name}')">
+                            Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
-function showApprovalStatus(status) {
-    document.querySelectorAll('.approval-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    event.target.classList.add('active');
-    
-    if (status === 'pending') {
-        document.getElementById('pendingRestaurants').classList.remove('hidden');
-        document.getElementById('approvedRestaurants').classList.add('hidden');
-    } else {
-        document.getElementById('pendingRestaurants').classList.add('hidden');
-        document.getElementById('approvedRestaurants').classList.remove('hidden');
+// View Restaurant Details
+async function viewRestaurantDetails(restaurantId) {
+    try {
+        const data = await apiCall(`/admin/restaurants/${restaurantId}/details`);
+        
+        if (data.success) {
+            const restaurant = data.data;
+            const stats = restaurant.stats || {};
+            
+            const modal = document.getElementById('restaurantDetailsModal');
+            const body = document.getElementById('restaurantDetailsBody');
+            
+            body.innerHTML = `
+                <div class="details-grid">
+                    <div class="detail-item">
+                        <div class="detail-label">Restaurant Name</div>
+                        <div class="detail-value">${restaurant.name}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Cuisine Type</div>
+                        <div class="detail-value">${restaurant.cuisine}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Owner Name</div>
+                        <div class="detail-value">${restaurant.ownerId?.name || 'N/A'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Owner Email</div>
+                        <div class="detail-value">${restaurant.ownerId?.email || 'N/A'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Owner Phone</div>
+                        <div class="detail-value">${restaurant.ownerId?.mobile || 'N/A'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Total Tables</div>
+                        <div class="detail-value">${restaurant.totalTables || 0}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Opening Time</div>
+                        <div class="detail-value">${restaurant.openTime || 'N/A'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Closing Time</div>
+                        <div class="detail-value">${restaurant.closeTime || 'N/A'}</div>
+                    </div>
+                    <div class="detail-item" style="grid-column: 1 / -1;">
+                        <div class="detail-label">Address</div>
+                        <div class="detail-value">${restaurant.address || 'N/A'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Status</div>
+                        <div class="detail-value">
+                            <span class="status-pill ${restaurant.isApproved ? 'approved' : 'pending'}">
+                                ${restaurant.isApproved ? 'Approved' : 'Pending Approval'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Visibility</div>
+                        <div class="detail-value">
+                            <span class="status-pill ${restaurant.isActive ? 'active' : 'inactive'}">
+                                ${restaurant.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="performance-stats">
+                    <h3>Performance Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-box-value">${stats.totalOrders || 0}</div>
+                            <div class="stat-box-label">Total Orders</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-box-value">₹${stats.totalRevenue || 0}</div>
+                            <div class="stat-box-label">Total Revenue</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-box-value">${restaurant.rating || 4.0}</div>
+                            <div class="stat-box-label">Rating</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="detail-item" style="margin-top: 20px;">
+                    <div class="detail-label">Registered On</div>
+                    <div class="detail-value">${new Date(restaurant.createdAt).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    })}</div>
+                </div>
+            `;
+            
+            modal.classList.add('active');
+        }
+    } catch (error) {
+        console.error('Error loading restaurant details:', error);
+        alert('Failed to load restaurant details');
     }
 }
 
+function closeRestaurantDetailsModal() {
+    document.getElementById('restaurantDetailsModal').classList.remove('active');
+}
+
+// Edit Restaurant
+async function editRestaurant(restaurantId) {
+    try {
+        const restaurant = allRestaurantsData.find(r => r._id === restaurantId);
+        
+        if (!restaurant) {
+            alert('Restaurant not found');
+            return;
+        }
+        
+        // Populate form
+        document.getElementById('editRestaurantId').value = restaurantId;
+        document.getElementById('editRestaurantName').value = restaurant.name;
+        document.getElementById('editRestaurantCuisine').value = restaurant.cuisine || '';
+        document.getElementById('editRestaurantAddress').value = restaurant.address || '';
+        document.getElementById('editRestaurantTables').value = restaurant.totalTables || 10;
+        document.getElementById('editRestaurantDeliveryTime').value = restaurant.deliveryTime || '30-40 min';
+        document.getElementById('editRestaurantOpenTime').value = restaurant.openTime || '';
+        document.getElementById('editRestaurantCloseTime').value = restaurant.closeTime || '';
+        
+        // Show modal
+        document.getElementById('editRestaurantModal').classList.add('active');
+    } catch (error) {
+        console.error('Error opening edit modal:', error);
+        alert('Failed to open edit form');
+    }
+}
+
+function closeEditRestaurantModal() {
+    document.getElementById('editRestaurantModal').classList.remove('active');
+    document.getElementById('editRestaurantForm').reset();
+}
+
+// Approve Restaurant
 async function approveRestaurant(restaurantId) {
     if (!confirm('Are you sure you want to approve this restaurant?')) {
         return;
@@ -2082,23 +2649,20 @@ async function approveRestaurant(restaurantId) {
         });
         
         if (data.success) {
-            showToast('Restaurant approved successfully!', 'success');
-            loadRestaurantApprovals();
-        } else {
-            showToast(data.message || 'Failed to approve restaurant', 'error');
+            alert('Restaurant approved successfully!');
+            loadRestaurantManagement();
         }
     } catch (error) {
         console.error('Error approving restaurant:', error);
-        showToast('Failed to approve restaurant', 'error');
+        alert('Failed to approve restaurant: ' + error.message);
     }
 }
 
+// Reject Restaurant
 async function rejectRestaurant(restaurantId, restaurantName) {
-    const reason = prompt(`Are you sure you want to reject "${restaurantName}"?\n\nEnter reason for rejection (optional):`);
+    const reason = prompt(`Reject "${restaurantName}"?\n\nEnter reason for rejection (optional):`);
     
-    if (reason === null) {
-        return; // User cancelled
-    }
+    if (reason === null) return;
     
     try {
         const data = await apiCall(`/admin/restaurants/${restaurantId}/reject`, {
@@ -2107,16 +2671,625 @@ async function rejectRestaurant(restaurantId, restaurantName) {
         });
         
         if (data.success) {
-            showToast('Restaurant rejected and removed', 'success');
-            loadRestaurantApprovals();
-        } else {
-            showToast(data.message || 'Failed to reject restaurant', 'error');
+            alert('Restaurant rejected successfully');
+            loadRestaurantManagement();
         }
     } catch (error) {
         console.error('Error rejecting restaurant:', error);
-        showToast('Failed to reject restaurant', 'error');
+        alert('Failed to reject restaurant: ' + error.message);
     }
 }
+
+// Toggle Restaurant Status (Active/Inactive)
+async function toggleRestaurantStatus(restaurantId, newStatus) {
+    const action = newStatus ? 'activate' : 'deactivate';
+    
+    if (!confirm(`Are you sure you want to ${action} this restaurant?`)) {
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/admin/restaurants/${restaurantId}/toggle-status`, {
+            method: 'PUT',
+            body: JSON.stringify({ isActive: newStatus })
+        });
+        
+        if (data.success) {
+            alert(`Restaurant ${action}d successfully!`);
+            loadRestaurantManagement();
+        }
+    } catch (error) {
+        console.error('Error toggling restaurant status:', error);
+        alert(`Failed to ${action} restaurant: ` + error.message);
+    }
+}
+
+// Delete Restaurant
+async function deleteRestaurant(restaurantId, restaurantName) {
+    if (!confirm(`WARNING: Delete "${restaurantName}"?\n\nThis will permanently delete the restaurant and all associated data. This action cannot be undone.`)) {
+        return;
+    }
+    
+    const confirmText = prompt('Type "DELETE" to confirm deletion:');
+    
+    if (confirmText !== 'DELETE') {
+        alert('Deletion cancelled');
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/admin/restaurants/${restaurantId}`, {
+            method: 'DELETE'
+        });
+        
+        if (data.success) {
+            alert('Restaurant deleted successfully');
+            loadRestaurantManagement();
+        }
+    } catch (error) {
+        console.error('Error deleting restaurant:', error);
+        alert('Failed to delete restaurant: ' + error.message);
+    }
+}
+
+// Handle Edit Restaurant Form Submit
+document.addEventListener('DOMContentLoaded', function() {
+    const editForm = document.getElementById('editRestaurantForm');
+    if (editForm) {
+        editForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const restaurantId = document.getElementById('editRestaurantId').value;
+            const updateData = {
+                name: document.getElementById('editRestaurantName').value,
+                cuisine: document.getElementById('editRestaurantCuisine').value,
+                address: document.getElementById('editRestaurantAddress').value,
+                totalTables: parseInt(document.getElementById('editRestaurantTables').value),
+                deliveryTime: document.getElementById('editRestaurantDeliveryTime').value,
+                openTime: document.getElementById('editRestaurantOpenTime').value,
+                closeTime: document.getElementById('editRestaurantCloseTime').value
+            };
+            
+            try {
+                const data = await apiCall(`/admin/restaurants/${restaurantId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(updateData)
+                });
+                
+                if (data.success) {
+                    alert('Restaurant updated successfully!');
+                    closeEditRestaurantModal();
+                    loadRestaurantManagement();
+                }
+            } catch (error) {
+                console.error('Error updating restaurant:', error);
+                alert('Failed to update restaurant: ' + error.message);
+            }
+        });
+    }
+    
+    // Add search input listener for restaurants
+    const searchInput = document.getElementById('restaurantSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            if (allRestaurantsData.length > 0) {
+                renderRestaurantsTable(allRestaurantsData);
+            }
+        });
+    }
+    
+    // Add search input listener for users
+    const userSearchInput = document.getElementById('userSearchInput');
+    if (userSearchInput) {
+        userSearchInput.addEventListener('input', function() {
+            if (allUsersData.length > 0) {
+                renderUsersTable(allUsersData);
+            }
+        });
+    }
+    
+    // Handle Edit User Role Form Submit
+    const editUserRoleForm = document.getElementById('editUserRoleForm');
+    if (editUserRoleForm) {
+        editUserRoleForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const userId = document.getElementById('editUserId').value;
+            const newRole = document.getElementById('editUserRole').value;
+            
+            if (!newRole) {
+                alert('Please select a role');
+                return;
+            }
+            
+            try {
+                const data = await apiCall(`/admin/users/${userId}/role`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ role: newRole })
+                });
+                
+                if (data.success) {
+                    alert('User role updated successfully!');
+                    closeEditUserRoleModal();
+                    renderAdminUsers();
+                }
+            } catch (error) {
+                console.error('Error updating user role:', error);
+                alert('Failed to update user role: ' + error.message);
+            }
+        });
+    }
+});
+
+// Make restaurant management functions globally available
+window.loadRestaurantManagement = loadRestaurantManagement;
+window.viewRestaurantDetails = viewRestaurantDetails;
+window.closeRestaurantDetailsModal = closeRestaurantDetailsModal;
+window.editRestaurant = editRestaurant;
+window.closeEditRestaurantModal = closeEditRestaurantModal;
+window.approveRestaurant = approveRestaurant;
+window.rejectRestaurant = rejectRestaurant;
+window.toggleRestaurantStatus = toggleRestaurantStatus;
+window.deleteRestaurant = deleteRestaurant;
+
+// Make user management functions globally available
+window.renderAdminUsers = renderAdminUsers;
+window.viewUserDetails = viewUserDetails;
+window.closeUserDetailsModal = closeUserDetailsModal;
+window.openEditUserRole = openEditUserRole;
+window.closeEditUserRoleModal = closeEditUserRoleModal;
+window.toggleUserStatus = toggleUserStatus;
+window.deleteUser = deleteUser;
+
+// Google Maps Autocomplete initialization
+let autocomplete;
+let selectedPlaceDetails = null;
+
+function initAutocomplete() {
+    console.log('Initializing Google Maps Autocomplete...');
+    
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupAutocomplete);
+    } else {
+        setupAutocomplete();
+    }
+}
+
+function setupAutocomplete() {
+    const addressInput = document.getElementById('deliveryAddress');
+    
+    if (!addressInput) {
+        console.log('Address input not found yet, will retry when checkout is opened');
+        return;
+    }
+    
+    // Make input writable when user clicks on it
+    addressInput.addEventListener('click', function() {
+        this.removeAttribute('readonly');
+        this.focus();
+    });
+    
+    try {
+        // Initialize autocomplete with restrictions to India (you can change this)
+        autocomplete = new google.maps.places.Autocomplete(addressInput, {
+            componentRestrictions: { country: 'in' }, // Change 'in' to your country code
+            fields: ['formatted_address', 'geometry', 'name', 'address_components'],
+            types: ['address']
+        });
+        
+        // Listen for place selection
+        autocomplete.addListener('place_changed', onPlaceSelected);
+        
+        console.log('Google Maps Autocomplete initialized successfully');
+    } catch (error) {
+        console.error('Error initializing autocomplete:', error);
+    }
+}
+
+function onPlaceSelected() {
+    const place = autocomplete.getPlace();
+    
+    if (!place.geometry) {
+        console.log('No details available for input:', place.name);
+        return;
+    }
+    
+    // Store the selected place details
+    selectedPlaceDetails = {
+        address: place.formatted_address,
+        name: place.name,
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng()
+    };
+    
+    console.log('Selected place:', selectedPlaceDetails);
+    
+    // Update the input with formatted address
+    document.getElementById('deliveryAddress').value = place.formatted_address;
+}
+
+// Reinitialize autocomplete when checkout page is shown
+const originalShowCheckout = showCheckout;
+showCheckout = function() {
+    originalShowCheckout.apply(this, arguments);
+    
+    // Setup autocomplete after a small delay to ensure DOM is ready
+    setTimeout(() => {
+        setupAutocomplete();
+        
+        // Add GPS button listener
+        const gpsBtn = document.getElementById('gpsButton');
+        if (gpsBtn) {
+            console.log('Adding click listener to GPS button');
+            gpsBtn.addEventListener('click', getCurrentLocation);
+        }
+    }, 100);
+};
+
+// Make initAutocomplete globally available for the callback
+window.initAutocomplete = initAutocomplete;
+
+// GPS Location Function
+function getCurrentLocation() {
+    console.log('=== GPS BUTTON CLICKED ===');
+    
+    const gpsButton = document.getElementById('gpsButton');
+    const addressInput = document.getElementById('deliveryAddress');
+    
+    console.log('GPS Button:', gpsButton);
+    console.log('Address Input:', addressInput);
+    
+    // Check if Google Maps is loaded
+    if (typeof google === 'undefined' || !google.maps) {
+        console.error('Google Maps not loaded');
+        alert('Google Maps is still loading. Please wait a moment and try again.');
+        return;
+    }
+    
+    console.log('Google Maps loaded successfully');
+    
+    if (!navigator.geolocation) {
+        console.error('Geolocation not supported');
+        alert('Geolocation is not supported by your browser');
+        return;
+    }
+    
+    console.log('Starting geolocation request...');
+    
+    // Disable button and show loading state
+    gpsButton.disabled = true;
+    gpsButton.classList.add('loading');
+    gpsButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg><span>Getting Location...</span>';
+    
+    addressInput.value = 'Getting your location...';
+    
+    navigator.geolocation.getCurrentPosition(
+        // Success callback
+        async (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            console.log('✓ Got coordinates:', { lat, lng });
+            
+            // Use Google Maps Geocoding API to get address from coordinates
+            try {
+                console.log('Starting geocoding...');
+                const geocoder = new google.maps.Geocoder();
+                const latlng = { lat, lng };
+                
+                geocoder.geocode({ location: latlng }, (results, status) => {
+                    console.log('Geocoding status:', status);
+                    console.log('Geocoding results:', results);
+                    
+                    if (status === 'OK' && results[0]) {
+                        const address = results[0].formatted_address;
+                        
+                        console.log('✓ Address found:', address);
+                        
+                        // Store the location details
+                        selectedPlaceDetails = {
+                            address: address,
+                            lat: lat,
+                            lng: lng
+                        };
+                        
+                        // Update the input
+                        addressInput.value = address;
+                        addressInput.removeAttribute('readonly');
+                        
+                        console.log('✓ Address successfully set');
+                    } else {
+                        console.error('Geocoding failed:', status);
+                        addressInput.value = '';
+                        addressInput.removeAttribute('readonly');
+                        alert('Could not get address from your location. Please try typing your address.');
+                    }
+                    
+                    // Re-enable button
+                    resetGPSButton(gpsButton);
+                });
+                
+            } catch (error) {
+                console.error('Error getting address:', error);
+                addressInput.value = '';
+                addressInput.removeAttribute('readonly');
+                alert('Error getting your address. Please try typing it manually.');
+                resetGPSButton(gpsButton);
+            }
+        },
+        // Error callback
+        (error) => {
+            console.error('Geolocation error:', error);
+            addressInput.value = '';
+            addressInput.removeAttribute('readonly');
+            
+            let errorMessage = 'Unable to get your location. ';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage += 'Please allow location access in your browser settings.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage += 'Location information is unavailable.';
+                    break;
+                case error.TIMEOUT:
+                    errorMessage += 'Location request timed out.';
+                    break;
+                default:
+                    errorMessage += 'An unknown error occurred.';
+            }
+            
+            alert(errorMessage);
+            resetGPSButton(gpsButton);
+        },
+        // Options
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
+
+function resetGPSButton(gpsButton) {
+    gpsButton.disabled = false;
+    gpsButton.classList.remove('loading');
+    gpsButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg><span>Use My Location</span>';
+}
+
+// Make getCurrentLocation globally available
+window.getCurrentLocation = getCurrentLocation;
+
+// Restaurant Map Picker Functions
+let restaurantMap;
+let restaurantMarker;
+let restaurantGeocoder;
+let selectedRestaurantLocation = null;
+
+function openRestaurantMapPicker() {
+    const modal = document.getElementById('restaurantMapModal');
+    modal.classList.add('active');
+    
+    // Initialize map after modal is shown
+    setTimeout(() => {
+        initRestaurantMap();
+    }, 100);
+}
+
+function closeRestaurantMapPicker() {
+    const modal = document.getElementById('restaurantMapModal');
+    modal.classList.remove('active');
+    document.getElementById('mapSearchInput').value = '';
+}
+
+function initRestaurantMap() {
+    // Check if Google Maps is loaded
+    if (typeof google === 'undefined' || !google.maps) {
+        alert('Google Maps is still loading. Please wait a moment and try again.');
+        closeRestaurantMapPicker();
+        return;
+    }
+    
+    // If map already exists, just center it
+    if (restaurantMap) {
+        restaurantMap.setCenter({ lat: 28.6139, lng: 77.2090 }); // Default to Delhi
+        return;
+    }
+    
+    // Default location (Delhi, India - you can change this)
+    const defaultLocation = { lat: 28.6139, lng: 77.2090 };
+    
+    // Create map
+    const mapDiv = document.getElementById('restaurantMap');
+    restaurantMap = new google.maps.Map(mapDiv, {
+        center: defaultLocation,
+        zoom: 13,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+        zoomControl: true
+    });
+    
+    // Initialize geocoder
+    restaurantGeocoder = new google.maps.Geocoder();
+    
+    // Add click listener to map
+    restaurantMap.addListener('click', (event) => {
+        placeRestaurantMarker(event.latLng);
+    });
+    
+    // Add autocomplete to search input
+    const searchInput = document.getElementById('mapSearchInput');
+    const autocomplete = new google.maps.places.Autocomplete(searchInput, {
+        componentRestrictions: { country: 'in' },
+        fields: ['formatted_address', 'geometry', 'name']
+    });
+    
+    autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        
+        if (!place.geometry) {
+            console.log('No details for:', place.name);
+            return;
+        }
+        
+        // Move map to selected place
+        restaurantMap.setCenter(place.geometry.location);
+        restaurantMap.setZoom(17);
+        
+        // Place marker
+        placeRestaurantMarker(place.geometry.location);
+    });
+}
+
+function placeRestaurantMarker(location) {
+    // Remove existing marker
+    if (restaurantMarker) {
+        restaurantMarker.setMap(null);
+    }
+    
+    // Create new marker
+    restaurantMarker = new google.maps.Marker({
+        position: location,
+        map: restaurantMap,
+        animation: google.maps.Animation.DROP,
+        draggable: true
+    });
+    
+    // Add drag listener
+    restaurantMarker.addListener('dragend', (event) => {
+        updateRestaurantLocationInfo(event.latLng);
+    });
+    
+    // Update location info
+    updateRestaurantLocationInfo(location);
+    
+    // Center map on marker
+    restaurantMap.panTo(location);
+}
+
+function updateRestaurantLocationInfo(location) {
+    const lat = location.lat();
+    const lng = location.lng();
+    
+    // Update coordinates display
+    document.getElementById('mapSelectedCoords').textContent = 
+        `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+    
+    // Geocode to get address
+    restaurantGeocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+            const address = results[0].formatted_address;
+            document.getElementById('mapSelectedAddress').textContent = address;
+            
+            // Store selected location
+            selectedRestaurantLocation = {
+                address: address,
+                lat: lat,
+                lng: lng
+            };
+            
+            // Enable confirm button
+            document.getElementById('confirmMapLocation').disabled = false;
+        } else {
+            document.getElementById('mapSelectedAddress').textContent = 
+                'Click on the map to select a location';
+            document.getElementById('confirmMapLocation').disabled = true;
+        }
+    });
+}
+
+function searchOnMap() {
+    const searchInput = document.getElementById('mapSearchInput');
+    const address = searchInput.value.trim();
+    
+    if (!address) {
+        alert('Please enter an address to search');
+        return;
+    }
+    
+    restaurantGeocoder.geocode({ address: address }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+            const location = results[0].geometry.location;
+            restaurantMap.setCenter(location);
+            restaurantMap.setZoom(17);
+            placeRestaurantMarker(location);
+        } else {
+            alert('Location not found. Please try a different search term.');
+        }
+    });
+}
+
+function detectRestaurantLocation() {
+    if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser');
+        return;
+    }
+    
+    const gpsBtn = document.querySelector('.map-gps-btn');
+    if (gpsBtn) {
+        gpsBtn.disabled = true;
+        gpsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>';
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const location = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            };
+            
+            if (restaurantMap) {
+                restaurantMap.setCenter(location);
+                restaurantMap.setZoom(17);
+                placeRestaurantMarker(location);
+            } else {
+                // If modal is not open, just fill the lat/lng fields
+                document.getElementById('restaurantLat').value = location.lat;
+                document.getElementById('restaurantLon').value = location.lng;
+            }
+            
+            if (gpsBtn) {
+                gpsBtn.disabled = false;
+                gpsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>';
+            }
+        },
+        (error) => {
+            console.error('Geolocation error:', error);
+            alert('Unable to get your location. Please search manually or click on the map.');
+            
+            if (gpsBtn) {
+                gpsBtn.disabled = false;
+                gpsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>';
+            }
+        }
+    );
+}
+
+function confirmRestaurantLocation() {
+    if (!selectedRestaurantLocation) {
+        alert('Please select a location first');
+        return;
+    }
+    
+    // Fill the form fields
+    document.getElementById('restaurantAddress').value = selectedRestaurantLocation.address;
+    document.getElementById('restaurantLat').value = selectedRestaurantLocation.lat.toFixed(6);
+    document.getElementById('restaurantLon').value = selectedRestaurantLocation.lng.toFixed(6);
+    
+    // Close modal
+    closeRestaurantMapPicker();
+    
+    console.log('Restaurant location confirmed:', selectedRestaurantLocation);
+}
+
+// Make functions globally available
+window.openRestaurantMapPicker = openRestaurantMapPicker;
+window.closeRestaurantMapPicker = closeRestaurantMapPicker;
+window.searchOnMap = searchOnMap;
+window.detectRestaurantLocation = detectRestaurantLocation;
+window.confirmRestaurantLocation = confirmRestaurantLocation;
+
 
 
 

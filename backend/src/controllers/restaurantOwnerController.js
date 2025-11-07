@@ -234,6 +234,12 @@ exports.updateOrderStatus = async (req, res) => {
         const { orderId } = req.params;
         const { status } = req.body;
 
+        console.log('=== UPDATE ORDER STATUS ===');
+        console.log('Order ID:', orderId);
+        console.log('New Status:', status);
+        console.log('User:', req.user?.email, 'Role:', req.user?.role);
+        console.log('User Restaurant ID:', req.user?.restaurantId);
+
         const validStatuses = ['received', 'preparing', 'served', 'delivered', 'cancelled'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({
@@ -245,17 +251,44 @@ exports.updateOrderStatus = async (req, res) => {
         const order = await Order.findOne({ orderId });
 
         if (!order) {
+            console.log('Order not found:', orderId);
             return res.status(404).json({
                 success: false,
                 message: 'Order not found'
             });
         }
 
+        console.log('Order found:', order.orderId);
+        console.log('Order items:', order.items);
+
         // Verify this order belongs to the restaurant
+        if (!req.user.restaurantId) {
+            console.error('User has no restaurantId!');
+            return res.status(403).json({
+                success: false,
+                message: 'Restaurant not linked to your account. Please contact support.'
+            });
+        }
+
         const restaurant = await Restaurant.findById(req.user.restaurantId);
-        const hasItem = order.items.some(item => item.restaurantId === restaurant.id);
+        
+        if (!restaurant) {
+            console.error('Restaurant not found for ID:', req.user.restaurantId);
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found'
+            });
+        }
+
+        console.log('Restaurant:', restaurant.name, 'ID:', restaurant.id);
+        
+        const hasItem = order.items.some(item => {
+            console.log('Checking item restaurantId:', item.restaurantId, 'against:', restaurant.id);
+            return item.restaurantId === restaurant.id;
+        });
 
         if (!hasItem) {
+            console.log('No matching items found for restaurant:', restaurant.id);
             return res.status(403).json({
                 success: false,
                 message: 'Unauthorized to update this order'
@@ -264,6 +297,8 @@ exports.updateOrderStatus = async (req, res) => {
 
         order.status = status;
         await order.save();
+
+        console.log('Order status updated successfully');
 
         res.json({
             success: true,
@@ -431,7 +466,7 @@ exports.deleteDish = async (req, res) => {
 exports.updateRestaurantSettings = async (req, res) => {
     try {
         const updates = req.body;
-        const allowedUpdates = ['name', 'address', 'cuisine', 'logo', 'cardImage', 'openTime', 'closeTime', 'totalTables'];
+        const allowedUpdates = ['name', 'address', 'cuisine', 'logo', 'cardImage', 'openTime', 'closeTime', 'totalTables', 'location'];
 
         const restaurant = await Restaurant.findById(req.user.restaurantId);
 
@@ -447,6 +482,11 @@ exports.updateRestaurantSettings = async (req, res) => {
                 restaurant[key] = updates[key];
             }
         });
+        
+        // If logo is updated, also update cardImage
+        if (updates.logo) {
+            restaurant.cardImage = updates.logo;
+        }
 
         await restaurant.save();
 

@@ -11,6 +11,126 @@ function showRestaurantOwnerSignup() {
     document.getElementById('restaurantOwnerSignupPage').classList.remove('hidden');
 }
 
+// Convert Google Drive link to direct image URL
+function convertGoogleDriveUrl(url) {
+    if (!url) return url;
+    
+    // Check if it's a Google Drive link
+    const drivePatterns = [
+        /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,  // Standard file link
+        /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/, // Open link
+        /drive\.google\.com\/uc\?.*id=([a-zA-Z0-9_-]+)/  // Already converted
+    ];
+    
+    for (const pattern of drivePatterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            const fileId = match[1];
+            console.log('Converting Google Drive URL - File ID:', fileId);
+            // Convert to direct image URL (works better than uc?export=view)
+            return `https://lh3.googleusercontent.com/d/${fileId}`;
+        }
+    }
+    
+    // If not a Google Drive link, return as is
+    return url;
+}
+
+// Preview restaurant logo
+function previewRestaurantLogo() {
+    const logoInput = document.getElementById('restaurantLogo');
+    const logoPreview = document.getElementById('logoPreview');
+    const logoPreviewImg = document.getElementById('logoPreviewImg');
+    
+    let url = logoInput.value.trim();
+    
+    if (!url) {
+        logoPreview.classList.add('hidden');
+        return;
+    }
+    
+    // Convert Google Drive URL if needed
+    url = convertGoogleDriveUrl(url);
+    logoInput.value = url; // Update input with converted URL
+    
+    // Show preview
+    logoPreviewImg.src = url;
+    logoPreviewImg.onerror = function() {
+        alert('Unable to load image. Please check the URL and ensure:\n\n1. For Google Drive: Share link is set to "Anyone with the link"\n2. The URL is a direct link to an image\n3. The image format is supported (jpg, png, gif, etc.)');
+        logoPreview.classList.add('hidden');
+    };
+    logoPreviewImg.onload = function() {
+        logoPreview.classList.remove('hidden');
+    };
+}
+
+// Clear logo preview
+function clearLogoPreview() {
+    document.getElementById('restaurantLogo').value = '';
+    document.getElementById('logoPreview').classList.add('hidden');
+}
+
+// Preview settings logo
+function previewSettingsLogo() {
+    const logoInput = document.getElementById('settingsLogo');
+    const logoPreview = document.getElementById('settingsLogoPreview');
+    const logoPreviewImg = document.getElementById('settingsLogoPreviewImg');
+    
+    let url = logoInput.value.trim();
+    
+    if (!url) {
+        logoPreview.classList.add('hidden');
+        return;
+    }
+    
+    // Convert Google Drive URL if needed
+    url = convertGoogleDriveUrl(url);
+    logoInput.value = url; // Update input with converted URL
+    
+    // Show preview
+    logoPreviewImg.src = url;
+    logoPreviewImg.onerror = function() {
+        alert('Unable to load image. Please check the URL and ensure:\n\n1. For Google Drive: Share link is set to "Anyone with the link"\n2. The URL is a direct link to an image\n3. The image format is supported (jpg, png, gif, etc.)');
+        logoPreview.classList.add('hidden');
+    };
+    logoPreviewImg.onload = function() {
+        logoPreview.classList.remove('hidden');
+    };
+}
+
+// Clear settings logo preview
+function clearSettingsLogoPreview() {
+    document.getElementById('settingsLogo').value = '';
+    document.getElementById('settingsLogoPreview').classList.add('hidden');
+}
+
+// Track which form is using the map picker
+let mapPickerContext = 'signup'; // 'signup' or 'settings'
+
+// Open settings map picker
+function openSettingsMapPicker() {
+    mapPickerContext = 'settings';
+    openRestaurantMapPicker();
+}
+
+// Make functions globally accessible
+window.showRestaurantOwnerSignup = showRestaurantOwnerSignup;
+window.openRestaurantMapPicker = openRestaurantMapPicker;
+window.closeRestaurantMapPicker = closeRestaurantMapPicker;
+window.detectRestaurantLocation = detectRestaurantLocation;
+window.searchOnMap = searchOnMap;
+window.confirmRestaurantLocation = confirmRestaurantLocation;
+window.previewRestaurantLogo = previewRestaurantLogo;
+window.clearLogoPreview = clearLogoPreview;
+window.previewSettingsLogo = previewSettingsLogo;
+window.clearSettingsLogoPreview = clearSettingsLogoPreview;
+window.openSettingsMapPicker = openSettingsMapPicker;
+
+// Map variables for owner registration
+let ownerRestaurantMap = null;
+let ownerRestaurantMarker = null;
+let ownerSelectedLocation = null;
+
 // Detect restaurant location
 function detectRestaurantLocation() {
     if (!navigator.geolocation) {
@@ -18,11 +138,23 @@ function detectRestaurantLocation() {
         return;
     }
 
+    const modal = document.getElementById('restaurantMapModal');
+    const isMapOpen = !modal.classList.contains('hidden');
+
     navigator.geolocation.getCurrentPosition(
         (position) => {
-            document.getElementById('restaurantLat').value = position.coords.latitude.toFixed(6);
-            document.getElementById('restaurantLon').value = position.coords.longitude.toFixed(6);
-            alert('Location detected successfully!');
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            
+            if (isMapOpen) {
+                // If map is open, update the map
+                updateMapLocation(lat, lon);
+            } else {
+                // Otherwise update the input fields
+                document.getElementById('restaurantLat').value = lat.toFixed(6);
+                document.getElementById('restaurantLon').value = lon.toFixed(6);
+                alert('Location detected successfully!');
+            }
         },
         (error) => {
             alert('Unable to retrieve your location');
@@ -30,9 +162,183 @@ function detectRestaurantLocation() {
     );
 }
 
+// Open restaurant map picker
+function openRestaurantMapPicker() {
+    // Set default context if not already set
+    if (!mapPickerContext) {
+        mapPickerContext = 'signup';
+    }
+    
+    const modal = document.getElementById('restaurantMapModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+    
+    // Initialize map if not already done
+    setTimeout(() => {
+        if (!ownerRestaurantMap) {
+            initRestaurantMap();
+        } else {
+            ownerRestaurantMap.invalidateSize();
+        }
+    }, 100);
+}
+
+// Close restaurant map picker
+function closeRestaurantMapPicker() {
+    const modal = document.getElementById('restaurantMapModal');
+    modal.classList.remove('active');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 300);
+}
+
+// Initialize the map
+function initRestaurantMap() {
+    // Default to India center
+    const defaultLat = 28.6139;
+    const defaultLon = 77.2090;
+    
+    // Get field IDs based on context
+    const latFieldId = mapPickerContext === 'settings' ? 'settingsLatitude' : 'restaurantLat';
+    const lonFieldId = mapPickerContext === 'settings' ? 'settingsLongitude' : 'restaurantLon';
+    
+    // Get current values if any
+    const currentLat = parseFloat(document.getElementById(latFieldId).value) || defaultLat;
+    const currentLon = parseFloat(document.getElementById(lonFieldId).value) || defaultLon;
+    
+    // Create map
+    ownerRestaurantMap = L.map('restaurantMap').setView([currentLat, currentLon], 13);
+    
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(ownerRestaurantMap);
+    
+    // Add marker on click
+    ownerRestaurantMap.on('click', function(e) {
+        updateMapLocation(e.latlng.lat, e.latlng.lng);
+    });
+    
+    // If there's already a location, show it
+    if (document.getElementById(latFieldId).value && document.getElementById(lonFieldId).value) {
+        updateMapLocation(currentLat, currentLon);
+    }
+}
+
+// Update map location with marker
+function updateMapLocation(lat, lon) {
+    // Remove existing marker if any
+    if (ownerRestaurantMarker) {
+        ownerRestaurantMap.removeLayer(ownerRestaurantMarker);
+    }
+    
+    // Add new marker
+    ownerRestaurantMarker = L.marker([lat, lon], {
+        draggable: true
+    }).addTo(ownerRestaurantMap);
+    
+    // Update marker position on drag
+    ownerRestaurantMarker.on('dragend', function(e) {
+        const position = e.target.getLatLng();
+        updateLocationInfo(position.lat, position.lng);
+    });
+    
+    // Center map on marker
+    ownerRestaurantMap.setView([lat, lon], 15);
+    
+    // Update location info
+    updateLocationInfo(lat, lon);
+}
+
+// Update location information display
+async function updateLocationInfo(lat, lon) {
+    ownerSelectedLocation = { lat, lon };
+    
+    // Update coordinate display
+    document.getElementById('mapSelectedCoords').textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    
+    // Enable confirm button
+    document.getElementById('confirmMapLocation').disabled = false;
+    
+    // Try to get address from reverse geocoding
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+        const data = await response.json();
+        
+        if (data && data.display_name) {
+            document.getElementById('mapSelectedAddress').textContent = data.display_name;
+        } else {
+            document.getElementById('mapSelectedAddress').textContent = `Location: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+        }
+    } catch (error) {
+        console.error('Error getting address:', error);
+        document.getElementById('mapSelectedAddress').textContent = `Location: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+}
+
+// Search on map
+async function searchOnMap() {
+    const searchInput = document.getElementById('mapSearchInput').value.trim();
+    
+    if (!searchInput) {
+        alert('Please enter a location to search');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchInput)}&format=json&limit=1`);
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+            const result = data[0];
+            const lat = parseFloat(result.lat);
+            const lon = parseFloat(result.lon);
+            
+            updateMapLocation(lat, lon);
+        } else {
+            alert('Location not found. Please try a different search term.');
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+        alert('Error searching for location. Please try again.');
+    }
+}
+
+// Confirm restaurant location
+function confirmRestaurantLocation() {
+    if (!ownerSelectedLocation) {
+        alert('Please select a location on the map');
+        return;
+    }
+    
+    // Get field IDs based on context
+    const latFieldId = mapPickerContext === 'settings' ? 'settingsLatitude' : 'restaurantLat';
+    const lonFieldId = mapPickerContext === 'settings' ? 'settingsLongitude' : 'restaurantLon';
+    const addressFieldId = mapPickerContext === 'settings' ? 'settingsAddress' : 'restaurantAddress';
+    
+    // Update the form fields
+    document.getElementById(latFieldId).value = ownerSelectedLocation.lat.toFixed(6);
+    document.getElementById(lonFieldId).value = ownerSelectedLocation.lon.toFixed(6);
+    
+    const address = document.getElementById('mapSelectedAddress').textContent;
+    document.getElementById(addressFieldId).value = address;
+    
+    // Close the modal
+    closeRestaurantMapPicker();
+    
+    // Reset context to default
+    mapPickerContext = 'signup';
+    
+    // Show confirmation
+    alert('Location selected successfully!');
+}
+
 // Register restaurant owner
 async function registerRestaurantOwner(event) {
     event.preventDefault();
+    
+    console.log('Form submitted, processing registration...');
 
     const passcode = document.getElementById('ownerPasscode').value;
     const name = document.getElementById('ownerName').value;
@@ -48,9 +354,19 @@ async function registerRestaurantOwner(event) {
     const closeTime = document.getElementById('closeTime').value;
     const latitude = document.getElementById('restaurantLat').value;
     const longitude = document.getElementById('restaurantLon').value;
-    const logo = document.getElementById('restaurantLogo').value;
+    let logo = document.getElementById('restaurantLogo').value;
+    
+    // Convert Google Drive URL if provided
+    if (logo) {
+        logo = convertGoogleDriveUrl(logo);
+    }
 
     // Validation
+    if (!passcode || !name || !email || !password || !mobile || !restaurantName || !restaurantAddress || !cuisine) {
+        showOwnerSignupError('Please fill in all required fields');
+        return;
+    }
+
     if (password !== confirmPassword) {
         showOwnerSignupError('Passwords do not match');
         return;
@@ -61,7 +377,13 @@ async function registerRestaurantOwner(event) {
         return;
     }
 
+    if (!/^[0-9]{10}$/.test(mobile)) {
+        showOwnerSignupError('Please enter a valid 10-digit mobile number');
+        return;
+    }
+
     try {
+        console.log('Sending registration request...');
         const response = await apiCall('/restaurant-owner/register', {
             method: 'POST',
             body: JSON.stringify({
@@ -73,7 +395,7 @@ async function registerRestaurantOwner(event) {
                 restaurantName,
                 restaurantAddress,
                 cuisine,
-                totalTables: parseInt(totalTables),
+                totalTables: parseInt(totalTables) || 10,
                 openTime,
                 closeTime,
                 latitude: parseFloat(latitude) || 0,
@@ -81,6 +403,8 @@ async function registerRestaurantOwner(event) {
                 logo
             })
         });
+
+        console.log('Registration response:', response);
 
         if (response.success) {
             // Store token and login
@@ -95,7 +419,8 @@ async function registerRestaurantOwner(event) {
             showOwnerSignupError(response.message);
         }
     } catch (error) {
-        showOwnerSignupError(error.message || 'Registration failed');
+        console.error('Registration error:', error);
+        showOwnerSignupError(error.message || 'Registration failed. Please try again.');
     }
 }
 
@@ -576,12 +901,45 @@ function loadRestaurantSettings() {
     document.getElementById('settingsOpenTime').value = ownerRestaurant.openTime || '09:00';
     document.getElementById('settingsCloseTime').value = ownerRestaurant.closeTime || '22:00';
     document.getElementById('settingsTotalTables').value = ownerRestaurant.totalTables || 10;
-    document.getElementById('settingsLogo').value = ownerRestaurant.logo || '';
+    
+    // Load location if available
+    if (ownerRestaurant.location && ownerRestaurant.location.coordinates) {
+        const [lon, lat] = ownerRestaurant.location.coordinates;
+        document.getElementById('settingsLatitude').value = lat;
+        document.getElementById('settingsLongitude').value = lon;
+    }
+    
+    // Load logo and show preview if available
+    const logo = ownerRestaurant.logo || ownerRestaurant.cardImage || '';
+    document.getElementById('settingsLogo').value = logo;
+    
+    if (logo) {
+        // Show preview
+        const logoPreviewImg = document.getElementById('settingsLogoPreviewImg');
+        const logoPreview = document.getElementById('settingsLogoPreview');
+        logoPreviewImg.src = logo;
+        logoPreviewImg.onload = function() {
+            logoPreview.classList.remove('hidden');
+        };
+        logoPreviewImg.onerror = function() {
+            logoPreview.classList.add('hidden');
+        };
+    }
 }
 
 // Save restaurant settings
 async function saveRestaurantSettings(event) {
     event.preventDefault();
+    
+    let logo = document.getElementById('settingsLogo').value;
+    
+    // Convert Google Drive URL if provided
+    if (logo) {
+        logo = convertGoogleDriveUrl(logo);
+    }
+    
+    const latitude = document.getElementById('settingsLatitude').value;
+    const longitude = document.getElementById('settingsLongitude').value;
     
     const settings = {
         name: document.getElementById('settingsName').value,
@@ -590,8 +948,16 @@ async function saveRestaurantSettings(event) {
         openTime: document.getElementById('settingsOpenTime').value,
         closeTime: document.getElementById('settingsCloseTime').value,
         totalTables: parseInt(document.getElementById('settingsTotalTables').value),
-        logo: document.getElementById('settingsLogo').value
+        logo: logo
     };
+    
+    // Add location if provided
+    if (latitude && longitude) {
+        settings.location = {
+            type: 'Point',
+            coordinates: [parseFloat(longitude), parseFloat(latitude)]
+        };
+    }
     
     try {
         const response = await apiCall('/restaurant-owner/settings', {
@@ -609,19 +975,31 @@ async function saveRestaurantSettings(event) {
 }
 
 // Initialize restaurant owner forms
-document.addEventListener('DOMContentLoaded', () => {
+function initOwnerForms() {
     const ownerSignupForm = document.getElementById('ownerSignupForm');
     if (ownerSignupForm) {
+        console.log('Attaching event listener to owner signup form');
         ownerSignupForm.addEventListener('submit', registerRestaurantOwner);
+    } else {
+        console.warn('Owner signup form not found');
     }
     
     const dishForm = document.getElementById('dishForm');
     if (dishForm) {
         dishForm.addEventListener('submit', saveDish);
     }
-    
-    const settingsForm = document.getElementById('restaurantSettingsForm');
-    if (settingsForm) {
-        settingsForm.addEventListener('submit', saveRestaurantSettings);
-    }
-});
+}
+
+// Initialize on DOM ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initOwnerForms);
+} else {
+    // DOM is already loaded
+    initOwnerForms();
+}
+
+// Initialize settings form separately
+const settingsForm = document.getElementById('restaurantSettingsForm');
+if (settingsForm) {
+    settingsForm.addEventListener('submit', saveRestaurantSettings);
+}

@@ -6,6 +6,10 @@
     <title>QuickServe - Order Food Online</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <!-- Login Page -->
@@ -115,7 +119,17 @@
                     </div>
                     <div class="form-group">
                         <label for="restaurantAddress">Restaurant Address *</label>
-                        <textarea id="restaurantAddress" rows="3" required></textarea>
+                        <div class="map-address-wrapper">
+                            <input type="text" id="restaurantAddress" placeholder="Click 'Pick from Map' or type your address..." required>
+                            <button type="button" class="map-picker-btn" onclick="openRestaurantMapPicker()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                                    <circle cx="12" cy="10" r="3"/>
+                                </svg>
+                                <span>Pick from Map</span>
+                            </button>
+                        </div>
+                        <small class="form-hint">📍 Click the button above to select your restaurant location on the map</small>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -150,7 +164,15 @@
                     </div>
                     <div class="form-group">
                         <label for="restaurantLogo">Restaurant Logo URL (optional)</label>
-                        <input type="url" id="restaurantLogo" placeholder="https://example.com/logo.jpg">
+                        <input type="url" id="restaurantLogo" placeholder="Paste your image URL or Google Drive link" onchange="previewRestaurantLogo()">
+                        <small class="form-hint">
+                            💡 <strong>For Google Drive:</strong> Right-click image → Get link → Set to "Anyone with the link" → Paste here<br>
+                            📸 Or use: Imgur, Cloudinary, or any direct image URL
+                        </small>
+                        <div id="logoPreview" class="logo-preview hidden">
+                            <img id="logoPreviewImg" src="" alt="Logo preview">
+                            <button type="button" class="btn-link" onclick="clearLogoPreview()">✕ Remove</button>
+                        </div>
                     </div>
                 </div>
 
@@ -268,8 +290,28 @@
                         <input type="text" id="settingsName" required>
                     </div>
                     <div class="form-group">
-                        <label>Address</label>
-                        <textarea id="settingsAddress" rows="3" required></textarea>
+                        <label>Restaurant Address</label>
+                        <div class="map-address-wrapper">
+                            <textarea id="settingsAddress" rows="3" placeholder="Click 'Pick from Map' or type your address..." required></textarea>
+                            <button type="button" class="map-picker-btn" onclick="openSettingsMapPicker()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                                    <circle cx="12" cy="10" r="3"/>
+                                </svg>
+                                <span>Pick from Map</span>
+                            </button>
+                        </div>
+                        <small class="form-hint">📍 Click the button above to select your restaurant location on the map</small>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Latitude</label>
+                            <input type="number" id="settingsLatitude" step="any" placeholder="28.6139">
+                        </div>
+                        <div class="form-group">
+                            <label>Longitude</label>
+                            <input type="number" id="settingsLongitude" step="any" placeholder="77.2090">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Cuisine Type</label>
@@ -291,7 +333,15 @@
                     </div>
                     <div class="form-group">
                         <label>Restaurant Logo URL</label>
-                        <input type="url" id="settingsLogo">
+                        <input type="url" id="settingsLogo" placeholder="Paste your image URL or Google Drive link" onchange="previewSettingsLogo()">
+                        <small class="form-hint">
+                            💡 <strong>For Google Drive:</strong> Right-click image → Get link → Set to "Anyone with the link" → Paste here<br>
+                            📸 Or use: Imgur, Cloudinary, or any direct image URL
+                        </small>
+                        <div id="settingsLogoPreview" class="logo-preview hidden">
+                            <img id="settingsLogoPreviewImg" src="" alt="Logo preview">
+                            <button type="button" class="btn-link" onclick="clearSettingsLogoPreview()">✕ Remove</button>
+                        </div>
                     </div>
                     <button type="submit" class="btn">Save Changes</button>
                 </form>
@@ -534,7 +584,17 @@
                     </div>
                     <div class="address-section" id="addressSection">
                         <h3>Delivery Address</h3>
-                        <textarea class="address-input" id="deliveryAddress" placeholder="Enter your full delivery address..."></textarea>
+                        <div class="address-input-wrapper">
+                            <input type="text" class="address-input" id="deliveryAddress" placeholder="Click GPS or start typing your address..." readonly>
+                            <button type="button" class="gps-button" id="gpsButton" onclick="getCurrentLocation()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <span>Use My Location</span>
+                            </button>
+                        </div>
+                        <small class="address-hint">📍 Click the GPS button to automatically detect your location</small>
                     </div>
                     <div class="payment-section">
                         <h3>Payment Method</h3>
@@ -608,14 +668,53 @@
 
                     <!-- Users Section -->
                     <div id="adminUsers" class="admin-section hidden">
-                        <h3>All Users</h3>
-                        <table class="users-table" id="usersTable">
+                        <div class="section-header">
+                            <h3>User Management</h3>
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <input type="text" id="userSearchInput" class="search-input" placeholder="Search users by name or email...">
+                                <select id="userFilterRole" class="filter-select" onchange="renderAdminUsers()">
+                                    <option value="all">All Roles</option>
+                                    <option value="customer">Customers</option>
+                                    <option value="restaurantOwner">Restaurant Owners</option>
+                                    <option value="admin">Admins</option>
+                                </select>
+                                <select id="userFilterStatus" class="filter-select" onchange="renderAdminUsers()">
+                                    <option value="all">All Status</option>
+                                    <option value="active">Active</option>
+                                    <option value="suspended">Suspended</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="stats-cards" style="margin-bottom: 20px;">
+                            <div class="stat-card">
+                                <div class="stat-card-value" id="totalUsersCount">0</div>
+                                <div class="stat-card-label">Total Users</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-value" id="customersCount">0</div>
+                                <div class="stat-card-label">Customers</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-value" id="ownersCount">0</div>
+                                <div class="stat-card-label">Restaurant Owners</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-value" id="adminsCount">0</div>
+                                <div class="stat-card-label">Admins</div>
+                            </div>
+                        </div>
+
+                        <table class="data-table" id="usersTable">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
+                                    <th>User Info</th>
                                     <th>Role</th>
-                                    <th>Orders Count</th>
+                                    <th>Status</th>
+                                    <th>Total Orders</th>
+                                    <th>Total Spent</th>
+                                    <th>Joined</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="usersTableBody">
@@ -624,26 +723,178 @@
                         </table>
                     </div>
 
-                    <!-- Restaurant Approvals Section -->
+                    <!-- User Details Modal -->
+                    <div id="userDetailsModal" class="modal">
+                        <div class="modal-content large">
+                            <div class="modal-header">
+                                <h2>User Details</h2>
+                                <button class="modal-close" onclick="closeUserDetailsModal()">×</button>
+                            </div>
+                            <div class="modal-body" id="userDetailsBody">
+                                <!-- Details will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edit User Role Modal -->
+                    <div id="editUserRoleModal" class="modal">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h2>Change User Role</h2>
+                                <button class="modal-close" onclick="closeEditUserRoleModal()">×</button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="editUserRoleForm">
+                                    <div class="form-group">
+                                        <label>Current User</label>
+                                        <input type="text" id="editUserName" disabled>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="editUserRole">New Role *</label>
+                                        <select id="editUserRole" required>
+                                            <option value="">Select Role</option>
+                                            <option value="customer">Customer</option>
+                                            <option value="restaurantOwner">Restaurant Owner</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                    </div>
+                                    <input type="hidden" id="editUserId">
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn-secondary" onclick="closeEditUserRoleModal()">Cancel</button>
+                                        <button type="submit" class="btn-primary">Update Role</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Restaurant Management Section -->
                     <div id="adminRestaurants" class="admin-section hidden">
-                        <h3>Restaurant Approvals</h3>
-                        
-                        <div class="approval-tabs">
-                            <button class="approval-tab active" onclick="showApprovalStatus('pending')">Pending (<span id="pendingCount">0</span>)</button>
-                            <button class="approval-tab" onclick="showApprovalStatus('approved')">Approved (<span id="approvedCount">0</span>)</button>
+                        <div class="section-header">
+                            <h3>Restaurant Management</h3>
+                            <div class="header-actions">
+                                <input type="text" id="restaurantSearchInput" placeholder="Search restaurants..." class="search-input">
+                                <select id="restaurantFilterStatus" class="filter-select" onchange="loadRestaurantManagement()">
+                                    <option value="all">All Restaurants</option>
+                                    <option value="pending">Pending Approval</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
                         </div>
 
-                        <div id="pendingRestaurants" class="restaurants-grid">
-                            <!-- Pending restaurants will be populated by JavaScript -->
+                        <div class="restaurants-stats">
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalRestaurantsCount">0</div>
+                                <div class="stat-label">Total Restaurants</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="pendingRestaurantsCount">0</div>
+                                <div class="stat-label">Pending Approval</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="activeRestaurantsCount">0</div>
+                                <div class="stat-label">Active</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="inactiveRestaurantsCount">0</div>
+                                <div class="stat-label">Inactive</div>
+                            </div>
                         </div>
 
-                        <div id="approvedRestaurants" class="restaurants-grid hidden">
-                            <!-- Approved restaurants will be populated by JavaScript -->
+                        <div class="restaurants-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Restaurant</th>
+                                        <th>Owner</th>
+                                        <th>Cuisine</th>
+                                        <th>Status</th>
+                                        <th>Orders</th>
+                                        <th>Revenue</th>
+                                        <th>Rating</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="restaurantsTableBody">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; padding: 40px;">
+                                            Loading restaurants...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
 
-                <!-- Profile Page -->
+                <!-- Restaurant Details Modal -->
+                <div id="restaurantDetailsModal" class="modal">
+                    <div class="modal-content large">
+                        <div class="modal-header">
+                            <h2 id="restaurantModalTitle">Restaurant Details</h2>
+                            <button class="modal-close" onclick="closeRestaurantDetailsModal()">×</button>
+                        </div>
+                        <div class="modal-body" id="restaurantDetailsBody">
+                            <!-- Details will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Edit Restaurant Modal -->
+                <div id="editRestaurantModal" class="modal">
+                    <div class="modal-content large">
+                        <div class="modal-header">
+                            <h2>Edit Restaurant</h2>
+                            <button class="modal-close" onclick="closeEditRestaurantModal()">×</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="editRestaurantForm">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="editRestaurantName">Restaurant Name *</label>
+                                        <input type="text" id="editRestaurantName" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="editRestaurantCuisine">Cuisine Type *</label>
+                                        <input type="text" id="editRestaurantCuisine" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="editRestaurantAddress">Address *</label>
+                                    <textarea id="editRestaurantAddress" rows="2" required></textarea>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="editRestaurantTables">Total Tables</label>
+                                        <input type="number" id="editRestaurantTables" min="1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="editRestaurantDeliveryTime">Delivery Time</label>
+                                        <input type="text" id="editRestaurantDeliveryTime" placeholder="30-40 min">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="editRestaurantOpenTime">Opening Time</label>
+                                        <input type="time" id="editRestaurantOpenTime">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="editRestaurantCloseTime">Closing Time</label>
+                                        <input type="time" id="editRestaurantCloseTime">
+                                    </div>
+                                </div>
+                                <input type="hidden" id="editRestaurantId">
+                                <div class="modal-footer">
+                                    <button type="button" class="btn-secondary" onclick="closeEditRestaurantModal()">Cancel</button>
+                                    <button type="submit" class="btn-primary">Save Changes</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="profilePage" class="profile-page hidden">
                     <div class="profile-header">
                         <button class="back-btn" onclick="showHome()">← Back to Home</button>
@@ -873,6 +1124,40 @@
                 </div>
 
                 <div id="locationError" class="error-message hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restaurant Map Picker Modal -->
+    <div id="restaurantMapModal" class="map-modal hidden">
+        <div class="map-modal-content">
+            <div class="map-modal-header">
+                <h2>📍 Select Restaurant Location</h2>
+                <button class="map-modal-close" onclick="closeRestaurantMapPicker()">×</button>
+            </div>
+            <div class="map-search-bar">
+                <input type="text" id="mapSearchInput" placeholder="Search for your restaurant address...">
+                <button class="map-search-btn" onclick="searchOnMap()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                </button>
+                <button class="map-gps-btn" onclick="detectRestaurantLocation()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="restaurantMap" class="restaurant-map"></div>
+            <div class="map-selected-info" id="mapSelectedInfo">
+                <p class="map-selected-address" id="mapSelectedAddress">Click on the map or search to select a location</p>
+                <div class="map-selected-coords" id="mapSelectedCoords"></div>
+            </div>
+            <div class="map-modal-footer">
+                <button class="btn-secondary" onclick="closeRestaurantMapPicker()">Cancel</button>
+                <button class="btn-primary" id="confirmMapLocation" onclick="confirmRestaurantLocation()" disabled>Confirm Location</button>
             </div>
         </div>
     </div>

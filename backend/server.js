@@ -5,12 +5,10 @@ const cors = require('cors');
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
 app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/restaurants', require('./src/routes/restaurantRoutes'));
 app.use('/api/orders', require('./src/routes/orderRoutes'));
@@ -18,7 +16,6 @@ app.use('/api/admin', require('./src/routes/adminRoutes'));
 app.use('/api/location', require('./src/routes/locationRoutes'));
 app.use('/api/restaurant-owner', require('./src/routes/restaurantOwnerRoutes'));
 
-// Health check
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
@@ -27,7 +24,6 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(err.status || 500).json({
@@ -36,7 +32,6 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Database connection and server start
 mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
