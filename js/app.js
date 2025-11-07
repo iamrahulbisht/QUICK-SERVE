@@ -358,7 +358,10 @@ function normalizeRestaurantData(restaurant) {
         cuisine: restaurant.cuisine || 'Multi-Cuisine',
         rating: restaurant.rating || 4.5,
         deliveryTime: restaurant.deliveryTime || '30-40 mins',
-        categories: normalizedCategories
+        categories: normalizedCategories,
+        latitude: restaurant.location?.coordinates?.[1] || restaurant.latitude || null,
+        longitude: restaurant.location?.coordinates?.[0] || restaurant.longitude || null,
+        location: restaurant.location
     };
 
     normalized.logo = convertGoogleDriveUrlForDisplay(restaurant.logo || restaurant.cardImage || '');
@@ -541,12 +544,34 @@ function showCheckout() {
         `;
     } else {
         addressSection.style.display = 'block';
-        orderModeInfo.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span class="mode-badge delivery">🚚 Delivery</span>
-                <span style="color: var(--text-secondary);">Your order will be delivered to your address</span>
-            </div>
-        `;
+        
+        // Check delivery availability
+        const deliveryDetails = getDeliveryDetails();
+        if (deliveryDetails && !deliveryDetails.isAvailable) {
+            orderModeInfo.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fee; border-radius: 8px; border: 1px solid #fcc;">
+                    <span style="color: #c00; font-size: 20px;">⚠️</span>
+                    <div>
+                        <div style="font-weight: 600; color: #c00;">Delivery Not Available</div>
+                        <div style="color: #666; font-size: 14px;">Distance (${deliveryDetails.distance} km) exceeds maximum delivery range (${DELIVERY_CONFIG.MAX_DISTANCE_KM} km)</div>
+                    </div>
+                </div>
+            `;
+        } else if (deliveryDetails) {
+            orderModeInfo.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="mode-badge delivery">🚚 Delivery</span>
+                    <span style="color: var(--text-secondary);">Distance: ${deliveryDetails.distance} km | Est. Time: ${deliveryDetails.deliveryTime} mins</span>
+                </div>
+            `;
+        } else {
+            orderModeInfo.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="mode-badge delivery">🚚 Delivery</span>
+                    <span style="color: var(--text-secondary);">Please select your delivery location to see delivery details</span>
+                </div>
+            `;
+        }
         updateDeliveryInfo();
     }
     
@@ -820,8 +845,35 @@ function renderCartItems() {
     
     // Dine-in mode has NO delivery fee
     let deliveryFee = 0;
+    let deliveryFeeDisplay = '';
+    
     if (!isDineInMode()) {
-        deliveryFee = 40;
+        const deliveryDetails = getDeliveryDetails();
+        if (deliveryDetails && deliveryDetails.isAvailable) {
+            deliveryFee = deliveryDetails.deliveryFee;
+            deliveryFeeDisplay = `
+            <div class="summary-row">
+                <span>Delivery Fee (${deliveryDetails.distance} km)</span>
+                <span>₹${deliveryFee.toFixed(2)}</span>
+            </div>
+            `;
+        } else if (deliveryDetails && !deliveryDetails.isAvailable) {
+            deliveryFee = 0;
+            deliveryFeeDisplay = `
+            <div class="summary-row" style="color: #c00;">
+                <span>Delivery Fee</span>
+                <span>Not available (${deliveryDetails.distance} km)</span>
+            </div>
+            `;
+        } else {
+            deliveryFee = 0;
+            deliveryFeeDisplay = `
+            <div class="summary-row">
+                <span>Delivery Fee</span>
+                <span style="color: var(--text-secondary); font-size: 12px;">Select location</span>
+            </div>
+            `;
+        }
     }
     
     const total = subtotal + deliveryFee;
@@ -831,12 +883,7 @@ function renderCartItems() {
             <span>Subtotal</span>
             <span>₹${subtotal.toFixed(2)}</span>
         </div>
-        ${!isDineInMode() ? `
-        <div class="summary-row">
-            <span>Delivery Fee</span>
-            <span>₹${deliveryFee.toFixed(2)}</span>
-        </div>
-        ` : ''}
+        ${!isDineInMode() ? deliveryFeeDisplay : ''}
         <div class="summary-row total">
             <span>Total</span>
             <span>₹${total.toFixed(2)}</span>
@@ -856,10 +903,40 @@ function renderCheckoutSummary() {
     
     // Dine-in mode has no delivery fee
     let deliveryFee = 0;
+    let deliveryInfo = '';
+    
     if (!isDineInMode()) {
-        deliveryFee = (window.currentDeliveryData && window.currentDeliveryData.deliveryFee) 
-            ? window.currentDeliveryData.deliveryFee 
-            : 40;
+        const deliveryDetails = getDeliveryDetails();
+        
+        if (deliveryDetails && deliveryDetails.isAvailable) {
+            deliveryFee = deliveryDetails.deliveryFee;
+            deliveryInfo = `
+            <div class="summary-row">
+                <span>Delivery Fee (${deliveryDetails.distance} km)</span>
+                <span>₹${deliveryFee}</span>
+            </div>
+            `;
+        } else if (deliveryDetails && !deliveryDetails.isAvailable) {
+            // Delivery not available
+            summaryDiv.innerHTML = `
+                <h4 style="margin-bottom: 12px;">Order Summary</h4>
+                <div style="padding: 20px; text-align: center; color: #c00; background: #fee; border-radius: 8px;">
+                    <div style="font-size: 40px; margin-bottom: 12px;">⚠️</div>
+                    <div style="font-weight: 600; margin-bottom: 8px;">Delivery Not Available</div>
+                    <div style="font-size: 14px;">The restaurant is ${deliveryDetails.distance} km away. Maximum delivery distance is ${DELIVERY_CONFIG.MAX_DISTANCE_KM} km.</div>
+                    <button class="btn-secondary" style="margin-top: 16px;" onclick="backToMenu()">Back to Menu</button>
+                </div>
+            `;
+            return;
+        } else {
+            // Location not selected yet
+            deliveryInfo = `
+            <div class="summary-row">
+                <span>Delivery Fee</span>
+                <span style="color: var(--text-secondary); font-size: 12px;">Select location</span>
+            </div>
+            `;
+        }
     }
     
     const total = subtotal + deliveryFee;
@@ -877,12 +954,7 @@ function renderCheckoutSummary() {
     summaryDiv.innerHTML = `
         <h4 style="margin-bottom: 12px;">Order Summary</h4>
         ${itemsHtml}
-        ${!isDineInMode() ? `
-        <div class="summary-row">
-            <span>Delivery Fee</span>
-            <span>₹${deliveryFee}</span>
-        </div>
-        ` : ''}
+        ${deliveryInfo}
         <div class="summary-row total">
             <span>Total</span>
             <span>₹${total}</span>
@@ -1005,17 +1077,32 @@ async function placeOrder() {
     console.log('Table Number:', getDineInTable());
     console.log('Address:', address);
     
-    // Skip address validation for dine-in mode
-    if (!isDineInMode() && !address) {
-        alert('Please enter delivery address');
-        return;
-    }
-    
     // Validate table number for dine-in mode
     if (isDineInMode()) {
         const tableNum = getDineInTable();
         if (!tableNum) {
             alert('Please select a table number for dine-in orders');
+            return;
+        }
+    }
+    
+    // Delivery mode validations
+    if (!isDineInMode()) {
+        // Check if address is entered
+        if (!address) {
+            alert('Please select delivery address from the map');
+            return;
+        }
+        
+        // Check delivery availability
+        const deliveryDetails = getDeliveryDetails();
+        if (!deliveryDetails) {
+            alert('Please select your delivery location to continue');
+            return;
+        }
+        
+        if (!deliveryDetails.isAvailable) {
+            alert(`Delivery not available. The restaurant is ${deliveryDetails.distance} km away, which exceeds the maximum delivery range of ${DELIVERY_CONFIG.MAX_DISTANCE_KM} km.`);
             return;
         }
     }
@@ -2252,80 +2339,66 @@ function updateLocationDisplay() {
     }
 }
 
-async function calculateDeliveryInfo() {
-    if (!userLocation || !currentRestaurant) {
-        return null;
-    }
+// Update delivery info using new location system
+function updateDeliveryInfo() {
+    console.log('=== updateDeliveryInfo called ===');
     
-    try {
-        const response = await apiCall('/location/calculate', {
-            method: 'POST',
-            body: JSON.stringify({
-                restaurantId: currentRestaurant.id,
-                userLatitude: userLocation.latitude,
-                userLongitude: userLocation.longitude
-            })
-        });
-        
-        if (response.success) {
-            return response.data;
-        }
-        return null;
-    } catch (error) {
-        console.error('Calculate delivery error:', error);
-        return null;
-    }
-}
-
-async function updateDeliveryInfo() {
     const deliveryInfoDiv = document.getElementById('deliveryInfo');
     
-    if (!deliveryInfoDiv) return;
+    if (!deliveryInfoDiv) {
+        console.log('❌ deliveryInfo div not found');
+        return;
+    }
     
-    if (!userLocation) {
+    console.log('✓ deliveryInfo div found');
+    
+    // Check if user has selected a delivery location
+    if (!selectedPlaceDetails || !selectedPlaceDetails.lat || !selectedPlaceDetails.lng) {
+        // No location selected yet
+        console.log('❌ No location selected, showing placeholder');
         deliveryInfoDiv.innerHTML = `
-            <div style="text-align: center; padding: 12px;">
-                <p style="color: var(--text-secondary); margin-bottom: 12px;">Set your location for accurate delivery details</p>
-                <button class="btn-secondary" onclick="showLocationModal()">Set Location</button>
+            <div style="padding: 16px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 1px dashed #ddd;">
+                <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 14px;">
+                    📍 Select your delivery location to see delivery details
+                </p>
             </div>
         `;
         return;
     }
     
-    const deliveryData = await calculateDeliveryInfo();
+    console.log('✓ Location selected, getting delivery details...');
     
-    if (deliveryData && deliveryData.hasLocation) {
+    // Get delivery details using new system
+    const deliveryDetails = getDeliveryDetails();
+    
+    if (deliveryDetails && deliveryDetails.isAvailable) {
+        // Show delivery information
         deliveryInfoDiv.innerHTML = `
-            <h3>🚴 Delivery Information</h3>
-            <div class="delivery-detail">
-                <span>Distance:</span>
-                <span>${deliveryData.distance.toFixed(2)} km</span>
-            </div>
-            <div class="delivery-detail">
-                <span>Estimated Time:</span>
-                <span>${deliveryData.estimatedTime}</span>
-            </div>
-            <div class="delivery-detail">
-                <span>Delivery Fee:</span>
-                <span>₹${deliveryData.deliveryFee}</span>
+            <div style="padding: 16px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+                <h3 style="margin-bottom: 12px; color: #0369a1;">🚴 Delivery Information</h3>
+                <div class="delivery-detail" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e0f2fe;">
+                    <span style="color: #64748b;">Distance:</span>
+                    <span style="font-weight: 600; color: #0f172a;">${deliveryDetails.distance} km</span>
+                </div>
+                <div class="delivery-detail" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e0f2fe;">
+                    <span style="color: #64748b;">Estimated Time:</span>
+                    <span style="font-weight: 600; color: #0f172a;">${deliveryDetails.deliveryTime} mins</span>
+                </div>
+                <div class="delivery-detail" style="display: flex; justify-content: space-between; padding: 8px 0;">
+                    <span style="color: #64748b;">Delivery Fee:</span>
+                    <span style="font-weight: 600; color: #0369a1; font-size: 16px;">₹${deliveryDetails.deliveryFee}</span>
+                </div>
             </div>
         `;
-        
-        // Store delivery data for order placement
-        window.currentDeliveryData = deliveryData;
-    } else {
+    } else if (deliveryDetails && !deliveryDetails.isAvailable) {
+        // Delivery not available
         deliveryInfoDiv.innerHTML = `
-            <h3>🚴 Delivery Information</h3>
-            <div class="delivery-detail">
-                <span>Estimated Time:</span>
-                <span>30-40 mins</span>
-            </div>
-            <div class="delivery-detail">
-                <span>Delivery Fee:</span>
-                <span>₹40</span>
+            <div style="padding: 16px; text-align: center; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
+                <div style="font-size: 32px; margin-bottom: 8px;">⚠️</div>
+                <h3 style="margin-bottom: 8px; color: #dc2626;">Delivery Not Available</h3>
+                <p style="color: #991b1b; font-size: 14px;">Distance (${deliveryDetails.distance} km) exceeds maximum range (${DELIVERY_CONFIG.MAX_DISTANCE_KM} km)</p>
             </div>
         `;
-        window.currentDeliveryData = null;
     }
 }
 
@@ -2873,94 +2946,96 @@ window.deleteUser = deleteUser;
 // Make order management functions globally available
 window.deleteAllOrders = deleteAllOrders;
 
-// Google Maps Autocomplete initialization
-let autocomplete;
+// Store selected place details for delivery
 let selectedPlaceDetails = null;
 
-function initAutocomplete() {
-    console.log('Initializing Google Maps Autocomplete...');
-    
-    // Wait for DOM to be ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupAutocomplete);
-    } else {
-        setupAutocomplete();
-    }
-}
-
-function setupAutocomplete() {
-    const addressInput = document.getElementById('deliveryAddress');
-    
-    if (!addressInput) {
-        console.log('Address input not found yet, will retry when checkout is opened');
-        return;
-    }
-    
-    // Make input writable when user clicks on it
-    addressInput.addEventListener('click', function() {
-        this.removeAttribute('readonly');
-        this.focus();
-    });
-    
-    try {
-        // Initialize autocomplete with restrictions to India (you can change this)
-        autocomplete = new google.maps.places.Autocomplete(addressInput, {
-            componentRestrictions: { country: 'in' }, // Change 'in' to your country code
-            fields: ['formatted_address', 'geometry', 'name', 'address_components'],
-            types: ['address']
-        });
-        
-        // Listen for place selection
-        autocomplete.addListener('place_changed', onPlaceSelected);
-        
-        console.log('Google Maps Autocomplete initialized successfully');
-    } catch (error) {
-        console.error('Error initializing autocomplete:', error);
-    }
-}
-
-function onPlaceSelected() {
-    const place = autocomplete.getPlace();
-    
-    if (!place.geometry) {
-        console.log('No details available for input:', place.name);
-        return;
-    }
-    
-    // Store the selected place details
-    selectedPlaceDetails = {
-        address: place.formatted_address,
-        name: place.name,
-        lat: place.geometry.location.lat(),
-        lng: place.geometry.location.lng()
-    };
-    
-    console.log('Selected place:', selectedPlaceDetails);
-    
-    // Update the input with formatted address
-    document.getElementById('deliveryAddress').value = place.formatted_address;
-}
-
-// Reinitialize autocomplete when checkout page is shown
-const originalShowCheckout = showCheckout;
-showCheckout = function() {
-    originalShowCheckout.apply(this, arguments);
-    
-    // Setup autocomplete after a small delay to ensure DOM is ready
-    setTimeout(() => {
-        setupAutocomplete();
-        
-        // Add GPS button listener
-        const gpsBtn = document.getElementById('gpsButton');
-        if (gpsBtn) {
-            console.log('Adding click listener to GPS button');
-            gpsBtn.addEventListener('click', getCurrentLocation);
-        }
-    }, 100);
+// Delivery Configuration
+const DELIVERY_CONFIG = {
+    MAX_DISTANCE_KM: 10, // Maximum delivery distance in kilometers
+    BASE_FEE: 20, // Base delivery fee
+    PER_KM_RATE: 8, // Cost per kilometer
+    BASE_TIME_MINS: 15, // Base delivery time in minutes
+    PER_KM_TIME: 3 // Additional minutes per kilometer
 };
 
-// Make initAutocomplete globally available for the callback
-window.initAutocomplete = initAutocomplete;
+// Calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the Earth in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c; // Distance in kilometers
+    return distance;
+}
+
+// Calculate delivery fee based on distance
+function calculateDeliveryFee(distanceKm) {
+    if (distanceKm > DELIVERY_CONFIG.MAX_DISTANCE_KM) {
+        return null; // Delivery not available
+    }
+    const fee = DELIVERY_CONFIG.BASE_FEE + (distanceKm * DELIVERY_CONFIG.PER_KM_RATE);
+    return Math.round(fee);
+}
+
+// Calculate estimated delivery time based on distance
+function calculateDeliveryTime(distanceKm) {
+    const time = DELIVERY_CONFIG.BASE_TIME_MINS + (distanceKm * DELIVERY_CONFIG.PER_KM_TIME);
+    return Math.round(time);
+}
+
+// Get delivery details based on user and restaurant location
+function getDeliveryDetails() {
+    console.log('=== getDeliveryDetails DEBUG ===');
+    console.log('selectedPlaceDetails:', selectedPlaceDetails);
+    console.log('currentRestaurant:', currentRestaurant);
+    
+    if (!selectedPlaceDetails || !selectedPlaceDetails.lat || !selectedPlaceDetails.lng) {
+        console.log('❌ No user location selected');
+        return null;
+    }
+    
+    // Extract coordinates from restaurant.location.coordinates [longitude, latitude]
+    const restaurantLon = currentRestaurant?.location?.coordinates?.[0];
+    const restaurantLat = currentRestaurant?.location?.coordinates?.[1];
+    
+    if (!currentRestaurant || !restaurantLat || !restaurantLon) {
+        console.log('❌ Restaurant missing coordinates');
+        console.log('Restaurant location:', currentRestaurant?.location);
+        console.log('Restaurant lat:', restaurantLat);
+        console.log('Restaurant lon:', restaurantLon);
+        return null;
+    }
+    
+    console.log('✓ Calculating distance...');
+    console.log('User location:', selectedPlaceDetails.lat, selectedPlaceDetails.lng);
+    console.log('Restaurant location:', restaurantLat, restaurantLon);
+    
+    const distance = calculateDistance(
+        selectedPlaceDetails.lat,
+        selectedPlaceDetails.lng,
+        restaurantLat,
+        restaurantLon
+    );
+    
+    const deliveryFee = calculateDeliveryFee(distance);
+    const deliveryTime = calculateDeliveryTime(distance);
+    
+    console.log('✓ Distance:', distance, 'km');
+    console.log('✓ Delivery Fee:', deliveryFee);
+    console.log('✓ Delivery Time:', deliveryTime, 'mins');
+    console.log('✓ Available:', deliveryFee !== null);
+    
+    return {
+        distance: distance.toFixed(2),
+        deliveryFee: deliveryFee,
+        deliveryTime: deliveryTime,
+        isAvailable: deliveryFee !== null
+    };
+}
 
 // GPS Location Function
 function getCurrentLocation() {
@@ -2971,15 +3046,6 @@ function getCurrentLocation() {
     
     console.log('GPS Button:', gpsButton);
     console.log('Address Input:', addressInput);
-    
-    // Check if Google Maps is loaded
-    if (typeof google === 'undefined' || !google.maps) {
-        console.error('Google Maps not loaded');
-        alert('Google Maps is still loading. Please wait a moment and try again.');
-        return;
-    }
-    
-    console.log('Google Maps loaded successfully');
     
     if (!navigator.geolocation) {
         console.error('Geolocation not supported');
@@ -3004,43 +3070,87 @@ function getCurrentLocation() {
             
             console.log('✓ Got coordinates:', { lat, lng });
             
-            // Use Google Maps Geocoding API to get address from coordinates
+            // Use Nominatim API for reverse geocoding
             try {
-                console.log('Starting geocoding...');
-                const geocoder = new google.maps.Geocoder();
-                const latlng = { lat, lng };
-                
-                geocoder.geocode({ location: latlng }, (results, status) => {
-                    console.log('Geocoding status:', status);
-                    console.log('Geocoding results:', results);
-                    
-                    if (status === 'OK' && results[0]) {
-                        const address = results[0].formatted_address;
-                        
-                        console.log('✓ Address found:', address);
-                        
-                        // Store the location details
-                        selectedPlaceDetails = {
-                            address: address,
-                            lat: lat,
-                            lng: lng
-                        };
-                        
-                        // Update the input
-                        addressInput.value = address;
-                        addressInput.removeAttribute('readonly');
-                        
-                        console.log('✓ Address successfully set');
-                    } else {
-                        console.error('Geocoding failed:', status);
-                        addressInput.value = '';
-                        addressInput.removeAttribute('readonly');
-                        alert('Could not get address from your location. Please try typing your address.');
+                console.log('Starting reverse geocoding...');
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+                    {
+                        headers: {
+                            'Accept-Language': 'en'
+                        }
                     }
+                );
+                
+                if (!response.ok) {
+                    throw new Error('Geocoding failed');
+                }
+                
+                const data = await response.json();
+                console.log('Geocoding result:', data);
+                
+                if (data && data.display_name) {
+                    const address = data.display_name;
                     
-                    // Re-enable button
-                    resetGPSButton(gpsButton);
-                });
+                    console.log('✓ Address found:', address);
+                    
+                    // Store the location details
+                    selectedPlaceDetails = {
+                        address: address,
+                        lat: lat,
+                        lng: lng
+                    };
+                    
+                    console.log('✓ selectedPlaceDetails set:', selectedPlaceDetails);
+                    
+                    // Update the input
+                    addressInput.value = address;
+                    addressInput.removeAttribute('readonly');
+                    
+                    console.log('✓ Address successfully set');
+                    
+                    // Recalculate delivery details if on checkout page
+                    const checkoutPage = document.getElementById('checkoutPage');
+                    if (checkoutPage && !checkoutPage.classList.contains('hidden')) {
+                        // Update delivery info box
+                        updateDeliveryInfo();
+                        
+                        // Update order mode info
+                        const deliveryDetails = getDeliveryDetails();
+                        const orderModeInfo = document.getElementById('orderModeInfo');
+                        
+                        if (deliveryDetails && !deliveryDetails.isAvailable) {
+                            orderModeInfo.innerHTML = `
+                                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fee; border-radius: 8px; border: 1px solid #fcc;">
+                                    <span style="color: #c00; font-size: 20px;">⚠️</span>
+                                    <div>
+                                        <div style="font-weight: 600; color: #c00;">Delivery Not Available</div>
+                                        <div style="color: #666; font-size: 14px;">Distance (${deliveryDetails.distance} km) exceeds maximum delivery range (${DELIVERY_CONFIG.MAX_DISTANCE_KM} km)</div>
+                                    </div>
+                                </div>
+                            `;
+                        } else if (deliveryDetails) {
+                            orderModeInfo.innerHTML = `
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span class="mode-badge delivery">🚚 Delivery</span>
+                                    <span style="color: var(--text-secondary);">Distance: ${deliveryDetails.distance} km | Est. Time: ${deliveryDetails.deliveryTime} mins</span>
+                                </div>
+                            `;
+                        }
+                        
+                        // Update checkout summary and cart
+                        renderCheckoutSummary();
+                        renderCartItems();
+                    }
+                } else {
+                    console.error('No address found');
+                    addressInput.value = '';
+                    addressInput.removeAttribute('readonly');
+                    alert('Could not get address from your location. Please try typing your address.');
+                }
+                
+                // Re-enable button
+                resetGPSButton(gpsButton);
                 
             } catch (error) {
                 console.error('Error getting address:', error);
@@ -3092,235 +3202,252 @@ function resetGPSButton(gpsButton) {
 // Make getCurrentLocation globally available
 window.getCurrentLocation = getCurrentLocation;
 
-// Restaurant Map Picker Functions
-let restaurantMap;
-let restaurantMarker;
-let restaurantGeocoder;
-let selectedRestaurantLocation = null;
+// Delivery Map Picker Functions (for users) using Leaflet
+let deliveryMap = null;
+let deliveryMarker = null;
+let deliverySelectedLocation = null;
 
-function openRestaurantMapPicker() {
-    const modal = document.getElementById('restaurantMapModal');
+function openDeliveryMapPicker() {
+    const modal = document.getElementById('deliveryMapModal');
+    modal.classList.remove('hidden');
     modal.classList.add('active');
     
-    // Initialize map after modal is shown
+    // Initialize map if not already done
     setTimeout(() => {
-        initRestaurantMap();
+        if (!deliveryMap) {
+            initDeliveryMap();
+        } else {
+            deliveryMap.invalidateSize();
+        }
     }, 100);
 }
 
-function closeRestaurantMapPicker() {
-    const modal = document.getElementById('restaurantMapModal');
+function closeDeliveryMapPicker() {
+    const modal = document.getElementById('deliveryMapModal');
     modal.classList.remove('active');
-    document.getElementById('mapSearchInput').value = '';
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 300);
 }
 
-function initRestaurantMap() {
-    // Check if Google Maps is loaded
-    if (typeof google === 'undefined' || !google.maps) {
-        alert('Google Maps is still loading. Please wait a moment and try again.');
-        closeRestaurantMapPicker();
-        return;
-    }
+function initDeliveryMap() {
+    // Default to India center
+    const defaultLat = 28.6139;
+    const defaultLon = 77.2090;
     
-    // If map already exists, just center it
-    if (restaurantMap) {
-        restaurantMap.setCenter({ lat: 28.6139, lng: 77.2090 }); // Default to Delhi
-        return;
-    }
+    // Get current values if any
+    const currentAddress = document.getElementById('deliveryAddress').value;
+    let currentLat = defaultLat;
+    let currentLon = defaultLon;
     
-    // Default location (Delhi, India - you can change this)
-    const defaultLocation = { lat: 28.6139, lng: 77.2090 };
+    // If there's already a selected location, use it
+    if (selectedPlaceDetails && selectedPlaceDetails.lat && selectedPlaceDetails.lng) {
+        currentLat = selectedPlaceDetails.lat;
+        currentLon = selectedPlaceDetails.lng;
+    }
     
     // Create map
-    const mapDiv = document.getElementById('restaurantMap');
-    restaurantMap = new google.maps.Map(mapDiv, {
-        center: defaultLocation,
-        zoom: 13,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: true,
-        zoomControl: true
+    deliveryMap = L.map('deliveryMap').setView([currentLat, currentLon], 13);
+    
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(deliveryMap);
+    
+    // Add marker on click
+    deliveryMap.on('click', function(e) {
+        updateDeliveryMapLocation(e.latlng.lat, e.latlng.lng);
     });
     
-    // Initialize geocoder
-    restaurantGeocoder = new google.maps.Geocoder();
-    
-    // Add click listener to map
-    restaurantMap.addListener('click', (event) => {
-        placeRestaurantMarker(event.latLng);
-    });
-    
-    // Add autocomplete to search input
-    const searchInput = document.getElementById('mapSearchInput');
-    const autocomplete = new google.maps.places.Autocomplete(searchInput, {
-        componentRestrictions: { country: 'in' },
-        fields: ['formatted_address', 'geometry', 'name']
-    });
-    
-    autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        
-        if (!place.geometry) {
-            console.log('No details for:', place.name);
-            return;
-        }
-        
-        // Move map to selected place
-        restaurantMap.setCenter(place.geometry.location);
-        restaurantMap.setZoom(17);
-        
-        // Place marker
-        placeRestaurantMarker(place.geometry.location);
-    });
+    // If there's already a location, show it
+    if (selectedPlaceDetails && selectedPlaceDetails.lat && selectedPlaceDetails.lng) {
+        updateDeliveryMapLocation(currentLat, currentLon);
+    }
 }
 
-function placeRestaurantMarker(location) {
-    // Remove existing marker
-    if (restaurantMarker) {
-        restaurantMarker.setMap(null);
+function updateDeliveryMapLocation(lat, lon) {
+    // Remove existing marker if any
+    if (deliveryMarker) {
+        deliveryMap.removeLayer(deliveryMarker);
     }
     
-    // Create new marker
-    restaurantMarker = new google.maps.Marker({
-        position: location,
-        map: restaurantMap,
-        animation: google.maps.Animation.DROP,
+    // Add new marker
+    deliveryMarker = L.marker([lat, lon], {
         draggable: true
-    });
+    }).addTo(deliveryMap);
     
-    // Add drag listener
-    restaurantMarker.addListener('dragend', (event) => {
-        updateRestaurantLocationInfo(event.latLng);
+    // Update marker position on drag
+    deliveryMarker.on('dragend', function(e) {
+        const position = e.target.getLatLng();
+        updateDeliveryLocationInfo(position.lat, position.lng);
     });
-    
-    // Update location info
-    updateRestaurantLocationInfo(location);
     
     // Center map on marker
-    restaurantMap.panTo(location);
+    deliveryMap.setView([lat, lon], 15);
+    
+    // Update location info
+    updateDeliveryLocationInfo(lat, lon);
 }
 
-function updateRestaurantLocationInfo(location) {
-    const lat = location.lat();
-    const lng = location.lng();
+async function updateDeliveryLocationInfo(lat, lon) {
+    deliverySelectedLocation = { lat, lon };
     
-    // Update coordinates display
-    document.getElementById('mapSelectedCoords').textContent = 
-        `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+    // Update coordinate display
+    document.getElementById('deliveryMapSelectedCoords').textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
     
-    // Geocode to get address
-    restaurantGeocoder.geocode({ location: { lat, lng } }, (results, status) => {
-        if (status === 'OK' && results[0]) {
-            const address = results[0].formatted_address;
-            document.getElementById('mapSelectedAddress').textContent = address;
-            
-            // Store selected location
-            selectedRestaurantLocation = {
-                address: address,
-                lat: lat,
-                lng: lng
-            };
-            
-            // Enable confirm button
-            document.getElementById('confirmMapLocation').disabled = false;
+    // Enable confirm button
+    document.getElementById('confirmDeliveryMapLocation').disabled = false;
+    
+    // Try to get address from reverse geocoding
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+        const data = await response.json();
+        
+        if (data && data.display_name) {
+            document.getElementById('deliveryMapSelectedAddress').textContent = data.display_name;
         } else {
-            document.getElementById('mapSelectedAddress').textContent = 
-                'Click on the map to select a location';
-            document.getElementById('confirmMapLocation').disabled = true;
+            document.getElementById('deliveryMapSelectedAddress').textContent = `Location: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
         }
-    });
+    } catch (error) {
+        console.error('Error getting address:', error);
+        document.getElementById('deliveryMapSelectedAddress').textContent = `Location: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
 }
 
-function searchOnMap() {
-    const searchInput = document.getElementById('mapSearchInput');
-    const address = searchInput.value.trim();
+async function searchOnDeliveryMap() {
+    const searchInput = document.getElementById('deliveryMapSearchInput').value.trim();
     
-    if (!address) {
-        alert('Please enter an address to search');
+    if (!searchInput) {
+        alert('Please enter a location to search');
         return;
     }
     
-    restaurantGeocoder.geocode({ address: address }, (results, status) => {
-        if (status === 'OK' && results[0]) {
-            const location = results[0].geometry.location;
-            restaurantMap.setCenter(location);
-            restaurantMap.setZoom(17);
-            placeRestaurantMarker(location);
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchInput)}&format=json&limit=1`);
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+            const result = data[0];
+            const lat = parseFloat(result.lat);
+            const lon = parseFloat(result.lon);
+            
+            updateDeliveryMapLocation(lat, lon);
         } else {
             alert('Location not found. Please try a different search term.');
         }
-    });
+    } catch (error) {
+        console.error('Search error:', error);
+        alert('Error searching for location. Please try again.');
+    }
 }
 
-function detectRestaurantLocation() {
+function detectDeliveryLocation() {
     if (!navigator.geolocation) {
         alert('Geolocation is not supported by your browser');
         return;
     }
-    
-    const gpsBtn = document.querySelector('.map-gps-btn');
-    if (gpsBtn) {
-        gpsBtn.disabled = true;
-        gpsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>';
-    }
-    
+
+    const modal = document.getElementById('deliveryMapModal');
+    const isMapOpen = !modal.classList.contains('hidden');
+
     navigator.geolocation.getCurrentPosition(
         (position) => {
-            const location = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude
-            };
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
             
-            if (restaurantMap) {
-                restaurantMap.setCenter(location);
-                restaurantMap.setZoom(17);
-                placeRestaurantMarker(location);
+            if (isMapOpen && deliveryMap) {
+                // If map is open, update the map
+                updateDeliveryMapLocation(lat, lon);
             } else {
-                // If modal is not open, just fill the lat/lng fields
-                document.getElementById('restaurantLat').value = location.lat;
-                document.getElementById('restaurantLon').value = location.lng;
-            }
-            
-            if (gpsBtn) {
-                gpsBtn.disabled = false;
-                gpsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>';
+                // Otherwise just store coordinates
+                selectedPlaceDetails = {
+                    lat: lat,
+                    lng: lon,
+                    address: `${lat.toFixed(6)}, ${lon.toFixed(6)}`
+                };
             }
         },
         (error) => {
-            console.error('Geolocation error:', error);
-            alert('Unable to get your location. Please search manually or click on the map.');
-            
-            if (gpsBtn) {
-                gpsBtn.disabled = false;
-                gpsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>';
-            }
+            alert('Unable to retrieve your location');
         }
     );
 }
 
-function confirmRestaurantLocation() {
-    if (!selectedRestaurantLocation) {
-        alert('Please select a location first');
+function confirmDeliveryLocation() {
+    console.log('=== CONFIRM DELIVERY LOCATION ===');
+    
+    if (!deliverySelectedLocation) {
+        alert('Please select a location on the map');
         return;
     }
     
-    // Fill the form fields
-    document.getElementById('restaurantAddress').value = selectedRestaurantLocation.address;
-    document.getElementById('restaurantLat').value = selectedRestaurantLocation.lat.toFixed(6);
-    document.getElementById('restaurantLon').value = selectedRestaurantLocation.lng.toFixed(6);
+    console.log('deliverySelectedLocation:', deliverySelectedLocation);
     
-    // Close modal
-    closeRestaurantMapPicker();
+    // Get the address text
+    const address = document.getElementById('deliveryMapSelectedAddress').textContent;
     
-    console.log('Restaurant location confirmed:', selectedRestaurantLocation);
+    // Update the form fields
+    document.getElementById('deliveryAddress').value = address;
+    
+    // Store the selected place details
+    selectedPlaceDetails = {
+        address: address,
+        lat: deliverySelectedLocation.lat,
+        lng: deliverySelectedLocation.lon
+    };
+    
+    console.log('✓ selectedPlaceDetails set:', selectedPlaceDetails);
+    
+    // Close the modal
+    closeDeliveryMapPicker();
+    
+    // Recalculate delivery details if on checkout page
+    const checkoutPage = document.getElementById('checkoutPage');
+    if (checkoutPage && !checkoutPage.classList.contains('hidden')) {
+        // Update delivery info box
+        updateDeliveryInfo();
+        
+        // Update order mode info
+        const deliveryDetails = getDeliveryDetails();
+        const orderModeInfo = document.getElementById('orderModeInfo');
+        
+        if (deliveryDetails && !deliveryDetails.isAvailable) {
+            orderModeInfo.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fee; border-radius: 8px; border: 1px solid #fcc;">
+                    <span style="color: #c00; font-size: 20px;">⚠️</span>
+                    <div>
+                        <div style="font-weight: 600; color: #c00;">Delivery Not Available</div>
+                        <div style="color: #666; font-size: 14px;">Distance (${deliveryDetails.distance} km) exceeds maximum delivery range (${DELIVERY_CONFIG.MAX_DISTANCE_KM} km)</div>
+                    </div>
+                </div>
+            `;
+        } else if (deliveryDetails) {
+            orderModeInfo.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="mode-badge delivery">🚚 Delivery</span>
+                    <span style="color: var(--text-secondary);">Distance: ${deliveryDetails.distance} km | Est. Time: ${deliveryDetails.deliveryTime} mins</span>
+                </div>
+            `;
+        }
+        
+        // Update checkout summary and cart
+        renderCheckoutSummary();
+        renderCartItems();
+    }
+    
+    // Show confirmation
+    console.log('Delivery location confirmed:', selectedPlaceDetails);
 }
 
 // Make functions globally available
-window.openRestaurantMapPicker = openRestaurantMapPicker;
-window.closeRestaurantMapPicker = closeRestaurantMapPicker;
-window.searchOnMap = searchOnMap;
-window.detectRestaurantLocation = detectRestaurantLocation;
-window.confirmRestaurantLocation = confirmRestaurantLocation;
+window.openDeliveryMapPicker = openDeliveryMapPicker;
+window.closeDeliveryMapPicker = closeDeliveryMapPicker;
+window.searchOnDeliveryMap = searchOnDeliveryMap;
+window.detectDeliveryLocation = detectDeliveryLocation;
+window.confirmDeliveryLocation = confirmDeliveryLocation;
+
+// Restaurant Map Picker Functions are now in owner.js using Leaflet
 
 
 

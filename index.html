@@ -120,7 +120,7 @@
                     <div class="form-group">
                         <label for="restaurantAddress">Restaurant Address *</label>
                         <div class="map-address-wrapper">
-                            <input type="text" id="restaurantAddress" placeholder="Click 'Pick from Map' or type your address..." required>
+                            <input type="text" id="restaurantAddress" placeholder="Click 'Pick from Map' to select location..." readonly required>
                             <button type="button" class="map-picker-btn" onclick="openRestaurantMapPicker()">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -292,7 +292,7 @@
                     <div class="form-group">
                         <label>Restaurant Address</label>
                         <div class="map-address-wrapper">
-                            <textarea id="settingsAddress" rows="3" placeholder="Click 'Pick from Map' or type your address..." required></textarea>
+                            <textarea id="settingsAddress" rows="3" placeholder="Click 'Pick from Map' to select location..." readonly required></textarea>
                             <button type="button" class="map-picker-btn" onclick="openSettingsMapPicker()">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -463,10 +463,6 @@
                 <div class="header-content">
                     <div class="header-left">
                         <div class="logo">🍽️ QuickServe</div>
-                        <button class="location-btn" onclick="showLocationModal()">
-                            <span>📍</span>
-                            <span id="locationText">Set location</span>
-                        </button>
                         <div class="search-bar">
                             <span>🔍</span>
                             <input type="text" placeholder="Search restaurants or dishes..." id="searchInput">
@@ -585,16 +581,25 @@
                     <div class="address-section" id="addressSection">
                         <h3>Delivery Address</h3>
                         <div class="address-input-wrapper">
-                            <input type="text" class="address-input" id="deliveryAddress" placeholder="Click GPS or start typing your address..." readonly>
-                            <button type="button" class="gps-button" id="gpsButton" onclick="getCurrentLocation()">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                                <span>Use My Location</span>
-                            </button>
+                            <input type="text" class="address-input" id="deliveryAddress" placeholder="Select from map or use GPS..." readonly>
+                            <div class="address-buttons">
+                                <button type="button" class="map-picker-btn-inline" onclick="openDeliveryMapPicker()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                                        <circle cx="12" cy="10" r="3"/>
+                                    </svg>
+                                    <span>Pick from Map</span>
+                                </button>
+                                <button type="button" class="gps-button" id="gpsButton" onclick="getCurrentLocation()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                    <span>Use My Location</span>
+                                </button>
+                            </div>
                         </div>
-                        <small class="address-hint">📍 Click the GPS button to automatically detect your location</small>
+                        <small class="address-hint">📍 Select your delivery location from the map or use GPS</small>
                     </div>
                     <div class="payment-section">
                         <h3>Payment Method</h3>
@@ -1163,6 +1168,40 @@
             <div class="map-modal-footer">
                 <button class="btn-secondary" onclick="closeRestaurantMapPicker()">Cancel</button>
                 <button class="btn-primary" id="confirmMapLocation" onclick="confirmRestaurantLocation()" disabled>Confirm Location</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delivery Map Picker Modal (for users) -->
+    <div id="deliveryMapModal" class="map-modal hidden">
+        <div class="map-modal-content">
+            <div class="map-modal-header">
+                <h2>📍 Select Delivery Location</h2>
+                <button class="map-modal-close" onclick="closeDeliveryMapPicker()">×</button>
+            </div>
+            <div class="map-search-bar">
+                <input type="text" id="deliveryMapSearchInput" placeholder="Search for your delivery address...">
+                <button class="map-search-btn" onclick="searchOnDeliveryMap()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                </button>
+                <button class="map-gps-btn" onclick="detectDeliveryLocation()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="deliveryMap" class="restaurant-map"></div>
+            <div class="map-selected-info" id="deliveryMapSelectedInfo">
+                <p class="map-selected-address" id="deliveryMapSelectedAddress">Click on the map or search to select a location</p>
+                <div class="map-selected-coords" id="deliveryMapSelectedCoords"></div>
+            </div>
+            <div class="map-modal-footer">
+                <button class="btn-secondary" onclick="closeDeliveryMapPicker()">Cancel</button>
+                <button class="btn-primary" id="confirmDeliveryMapLocation" onclick="confirmDeliveryLocation()" disabled>Confirm Location</button>
             </div>
         </div>
     </div>
