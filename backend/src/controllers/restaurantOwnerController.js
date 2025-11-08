@@ -135,8 +135,25 @@ exports.getDashboard = async (req, res) => {
         }).sort('-createdAt');
 
         // Calculate analytics
-        const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+        const totalOrders = orders.filter(o => o.status !== 'cancelled').length;
+        
+        // Calculate revenue: exclude cancelled orders, and for COD, only count if served/delivered
+        const totalRevenue = orders.reduce((sum, order) => {
+            // Skip cancelled orders
+            if (order.status === 'cancelled') {
+                return sum;
+            }
+            
+            // For COD orders, only count if served or delivered
+            if (order.paymentMethod === 'cod' && 
+                order.status !== 'served' && 
+                order.status !== 'delivered') {
+                return sum;
+            }
+            
+            return sum + order.total;
+        }, 0);
+        
         const pendingOrders = orders.filter(o => o.status === 'received' || o.status === 'preparing').length;
 
         // Get top selling dishes

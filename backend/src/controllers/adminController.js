@@ -34,21 +34,32 @@ const sanitizeRestaurantDocument = (restaurant) => {
 
 exports.getStats = async (req, res) => {
     try {
-        const totalOrders = await Order.countDocuments();
+        // Total orders excluding cancelled
+        const totalOrders = await Order.countDocuments({ status: { $ne: 'cancelled' } });
+        
+        // Revenue calculation: exclude cancelled, for COD only count served/delivered
         const totalRevenue = await Order.aggregate([
             {
                 $match: {
-                    status: { $ne: 'Cancelled' },
+                    status: { $ne: 'cancelled' },
                     $or: [
+                        // Non-COD orders (already paid)
                         { paymentMethod: { $ne: 'cod' } },
-                        { status: 'Delivered' }
+                        // COD orders that are completed
+                        { 
+                            paymentMethod: 'cod',
+                            status: { $in: ['served', 'delivered'] }
+                        }
                     ]
                 }
             },
             { $group: { _id: null, total: { $sum: '$total' } } }
         ]);
+        
         const totalUsers = await User.countDocuments({ role: { $ne: 'admin' } });
-        const pendingOrders = await Order.countDocuments({ status: 'Placed' });
+        const pendingOrders = await Order.countDocuments({ 
+            status: { $in: ['received', 'preparing'] } 
+        });
 
         res.json({
             success: true,
@@ -506,11 +517,18 @@ exports.getRestaurantManagement = async (req, res) => {
             // Get order stats for this restaurant
             const orders = await Order.find({
                 'items.restaurantId': restaurant.id,
-                status: { $ne: 'Cancelled' }
+                status: { $ne: 'cancelled' }
             });
             
             const totalOrders = orders.length;
             const totalRevenue = orders.reduce((sum, order) => {
+                // Skip COD orders that aren't yet served/delivered
+                if (order.paymentMethod === 'cod' && 
+                    order.status !== 'served' && 
+                    order.status !== 'delivered') {
+                    return sum;
+                }
+                
                 // Calculate revenue from this restaurant's items only
                 const restaurantItems = order.items.filter(item => item.restaurantId === restaurant.id);
                 const itemsTotal = restaurantItems.reduce((itemSum, item) => 
@@ -561,11 +579,18 @@ exports.getRestaurantDetails = async (req, res) => {
         // Get detailed stats
         const orders = await Order.find({
             'items.restaurantId': restaurant.id,
-            status: { $ne: 'Cancelled' }
+            status: { $ne: 'cancelled' }
         });
         
         const totalOrders = orders.length;
         const totalRevenue = orders.reduce((sum, order) => {
+            // Skip COD orders that aren't yet served/delivered
+            if (order.paymentMethod === 'cod' && 
+                order.status !== 'served' && 
+                order.status !== 'delivered') {
+                return sum;
+            }
+            
             const restaurantItems = order.items.filter(item => item.restaurantId === restaurant.id);
             const itemsTotal = restaurantItems.reduce((itemSum, item) => 
                 itemSum + (item.price * item.quantity), 0

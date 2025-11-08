@@ -304,3 +304,52 @@ exports.getOrder = async (req, res) => {
         });
     }
 };
+
+exports.cancelOrder = async (req, res) => {
+    try {
+        if (req.user.role !== 'customer') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only customers can cancel their orders'
+            });
+        }
+
+        const order = await Order.findOne({ orderId: req.params.orderId, userId: req.user._id });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        // Check if order can be cancelled (not already served or delivered)
+        if (order.status === 'served' || order.status === 'delivered') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot cancel an order that has already been served or delivered'
+            });
+        }
+
+        if (order.status === 'cancelled') {
+            return res.status(400).json({
+                success: false,
+                message: 'Order is already cancelled'
+            });
+        }
+
+        order.status = 'cancelled';
+        await order.save();
+
+        res.json({
+            success: true,
+            message: 'Order cancelled successfully',
+            data: order
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
