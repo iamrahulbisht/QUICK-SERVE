@@ -444,6 +444,20 @@ function showHome() {
 function selectOrderMode(mode) {
     orderMode = mode;
     
+    // Update dineInMode object to keep state in sync
+    if (mode === 'dinein') {
+        dineInMode.active = true;
+        // Don't override restaurantId if set via QR code
+        if (!dineInMode.restaurantId && currentRestaurant) {
+            dineInMode.restaurantId = currentRestaurant.id;
+        }
+        // Don't override tableNumber if already set via QR code
+    } else {
+        dineInMode.active = false;
+        dineInMode.tableNumber = null;
+        dineInMode.restaurantId = null;
+    }
+    
     // Update button states
     const modeButtons = document.querySelectorAll('.mode-btn');
     modeButtons.forEach(btn => {
@@ -457,23 +471,24 @@ function selectOrderMode(mode) {
     const tableSection = document.getElementById('tableNumberSection');
     if (mode === 'dinein') {
         tableSection.classList.remove('hidden');
+        // Add event listener to sync table number selection
+        const tableSelect = document.getElementById('tableNumber');
+        if (tableSelect && !tableSelect.dataset.listenerAdded) {
+            tableSelect.addEventListener('change', function() {
+                const tableNum = parseInt(this.value);
+                if (tableNum) {
+                    dineInMode.tableNumber = tableNum;
+                    selectedTableNumber = tableNum;
+                }
+            });
+            tableSelect.dataset.listenerAdded = 'true';
+        }
     } else {
         tableSection.classList.add('hidden');
         selectedTableNumber = null;
     }
     
     console.log('Order mode selected:', mode);
-}
-
-function isDineInMode() {
-    return orderMode === 'dinein';
-}
-
-function getDineInTable() {
-    const tableSelect = document.getElementById('tableNumber');
-    const tableValue = tableSelect ? tableSelect.value : selectedTableNumber;
-    console.log('Getting dine-in table:', tableValue);
-    return tableValue ? parseInt(tableValue) : null;
 }
 
 function showMenu(restaurantId) {
@@ -483,27 +498,45 @@ function showMenu(restaurantId) {
     currentRestaurant = restaurants[restaurantId];
     lastVisitedRestaurant = restaurantId;
     
-    // Reset order mode to delivery
-    orderMode = 'delivery';
-    selectedTableNumber = null;
+    // Only reset order mode if not in dine-in mode via QR code
+    if (!dineInMode.active) {
+        orderMode = 'delivery';
+        selectedTableNumber = null;
+        
+        // Reset mode buttons
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        modeButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.mode === 'delivery') {
+                btn.classList.add('active');
+            }
+        });
+        
+        // Hide table number section
+        const tableSection = document.getElementById('tableNumberSection');
+        if (tableSection) {
+            tableSection.classList.add('hidden');
+        }
+    } else {
+        // In dine-in mode, set mode buttons accordingly
+        orderMode = 'dinein';
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        modeButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.mode === 'dinein') {
+                btn.classList.add('active');
+            }
+        });
+        
+        // Show table number section
+        const tableSection = document.getElementById('tableNumberSection');
+        if (tableSection) {
+            tableSection.classList.remove('hidden');
+        }
+    }
     
     document.getElementById('homePage').classList.add('hidden');
     document.getElementById('menuPage').classList.remove('hidden');
-    
-    // Reset mode buttons
-    const modeButtons = document.querySelectorAll('.mode-btn');
-    modeButtons.forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.mode === 'delivery') {
-            btn.classList.add('active');
-        }
-    });
-    
-    // Hide table number section
-    const tableSection = document.getElementById('tableNumberSection');
-    if (tableSection) {
-        tableSection.classList.add('hidden');
-    }
     
     renderMenu();
 }
@@ -1331,6 +1364,29 @@ async function showOrderHistory() {
     await loadOrderHistory();
 }
 
+async function cancelOrder(orderId) {
+    if (!confirm('Are you sure you want to cancel this order?')) {
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/orders/${orderId}/cancel`, {
+            method: 'PATCH'
+        });
+        
+        if (data.success) {
+            alert('Order cancelled successfully');
+            // Reload order history to show updated status
+            await loadOrderHistory();
+        } else {
+            alert(data.message || 'Failed to cancel order');
+        }
+    } catch (error) {
+        console.error('Error cancelling order:', error);
+        alert('Failed to cancel order. Please try again.');
+    }
+}
+
 async function loadOrderHistory() {
     const container = document.getElementById('orderHistoryList');
     
@@ -1397,6 +1453,11 @@ async function loadOrderHistory() {
                 `;
             }
             
+            // Check if order can be cancelled
+            const canCancel = order.status !== 'served' && order.status !== 'delivered' && order.status !== 'cancelled';
+            const cancelButton = canCancel ? 
+                `<button class="btn-cancel-order" onclick="cancelOrder('${order.orderId}')">Cancel Order</button>` : '';
+            
             orderCard.innerHTML = `
                 <div class="order-card-header">
                     <div>
@@ -1414,8 +1475,11 @@ async function loadOrderHistory() {
                 ${locationInfo}
                 
                 <div class="order-card-footer">
-                    <span>Payment: ${order.paymentMethod.toUpperCase()}</span>
-                    <span class="order-total">₹${order.total}</span>
+                    <div>
+                        <span>Payment: ${order.paymentMethod.toUpperCase()}</span>
+                        <span class="order-total">₹${order.total}</span>
+                    </div>
+                    ${cancelButton}
                 </div>
             `;
             
@@ -2422,6 +2486,10 @@ function checkDineInMode() {
             tableNumber: parseInt(table)
         };
         
+        // Also set orderMode for consistency
+        orderMode = 'dinein';
+        selectedTableNumber = parseInt(table);
+        
         // Show dine-in indicator
         const header = document.querySelector('.header');
         if (header && !document.getElementById('dineInBanner')) {
@@ -2441,11 +2509,20 @@ function checkDineInMode() {
 }
 
 function isDineInMode() {
-    return dineInMode.active;
+    // Check both dineInMode object and orderMode variable for compatibility
+    return dineInMode.active || orderMode === 'dinein';
 }
 
 function getDineInTable() {
-    return dineInMode.tableNumber;
+    // Try QR code table first, then manual selection
+    if (dineInMode.tableNumber) {
+        return dineInMode.tableNumber;
+    }
+    
+    // Check manual table selection
+    const tableSelect = document.getElementById('tableNumber');
+    const tableValue = tableSelect ? tableSelect.value : selectedTableNumber;
+    return tableValue ? parseInt(tableValue) : null;
 }
 
 // Restaurant Management Functions
@@ -2960,15 +3037,27 @@ const DELIVERY_CONFIG = {
 
 // Calculate distance between two coordinates using Haversine formula
 function calculateDistance(lat1, lon1, lat2, lon2) {
+    // Haversine formula to calculate distance between two points on Earth
     const R = 6371; // Radius of the Earth in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
+    
+    console.log('Calculating distance with:', { lat1, lon1, lat2, lon2 });
+    
+    // Convert degrees to radians
+    const toRad = (deg) => deg * Math.PI / 180;
+    
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    
     const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in kilometers
+    
+    console.log('Calculated distance:', distance.toFixed(2), 'km');
+    
     return distance;
 }
 
@@ -3011,21 +3100,31 @@ function getDeliveryDetails() {
     }
     
     console.log('✓ Calculating distance...');
-    console.log('User location:', selectedPlaceDetails.lat, selectedPlaceDetails.lng);
-    console.log('Restaurant location:', restaurantLat, restaurantLon);
+    console.log('User location (lat, lng):', selectedPlaceDetails.lat, selectedPlaceDetails.lng);
+    console.log('Restaurant location (lat, lon):', restaurantLat, restaurantLon);
+    console.log('User location types:', typeof selectedPlaceDetails.lat, typeof selectedPlaceDetails.lng);
+    console.log('Restaurant location types:', typeof restaurantLat, typeof restaurantLon);
+    
+    // Ensure all coordinates are numbers
+    const userLat = Number(selectedPlaceDetails.lat);
+    const userLng = Number(selectedPlaceDetails.lng);
+    const restLat = Number(restaurantLat);
+    const restLon = Number(restaurantLon);
+    
+    console.log('Converted values:', userLat, userLng, restLat, restLon);
     
     const distance = calculateDistance(
-        selectedPlaceDetails.lat,
-        selectedPlaceDetails.lng,
-        restaurantLat,
-        restaurantLon
+        userLat,
+        userLng,
+        restLat,
+        restLon
     );
     
     const deliveryFee = calculateDeliveryFee(distance);
     const deliveryTime = calculateDeliveryTime(distance);
     
-    console.log('✓ Distance:', distance, 'km');
-    console.log('✓ Delivery Fee:', deliveryFee);
+    console.log('✓ Distance:', distance.toFixed(2), 'km');
+    console.log('✓ Delivery Fee: Rs', deliveryFee);
     console.log('✓ Delivery Time:', deliveryTime, 'mins');
     console.log('✓ Available:', deliveryFee !== null);
     
