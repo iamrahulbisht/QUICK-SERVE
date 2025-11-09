@@ -449,31 +449,31 @@ async function loadOwnerDashboard() {
             // Update approval status
             const approvalStatus = document.getElementById('approvalStatus');
             if (ownerRestaurant.isApproved) {
-                approvalStatus.innerHTML = '<span class="approval-status approved">✓ Approved</span>';
+                approvalStatus.innerHTML = '<span class="approval-status approved">Approved</span>';
             } else {
-                approvalStatus.innerHTML = '<span class="approval-status pending">⏳ Pending Approval</span>';
+                approvalStatus.innerHTML = '<span class="approval-status pending">Pending Approval</span>';
             }
             
             // Update stats
             const statsGrid = document.getElementById('statsGrid');
             statsGrid.innerHTML = `
                 <div class="stat-card">
-                    <div class="stat-icon">📦</div>
+                    <div class="stat-icon"></div>
                     <div class="stat-label">Total Orders</div>
                     <div class="stat-value">${response.data.analytics.totalOrders}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-icon">💰</div>
+                    <div class="stat-icon"></div>
                     <div class="stat-label">Total Revenue</div>
                     <div class="stat-value">₹${response.data.analytics.totalRevenue}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-icon"></div>
                     <div class="stat-label">Pending Orders</div>
                     <div class="stat-value">${response.data.analytics.pendingOrders}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-icon">🍽️</div>
+                    <div class="stat-icon"></div>
                     <div class="stat-label">Tables</div>
                     <div class="stat-value">${ownerRestaurant.totalTables}</div>
                 </div>
@@ -593,7 +593,7 @@ async function loadOwnerDishes() {
     
     dishesContainer.innerHTML = allDishes.map(dish => `
         <div class="dish-card">
-            ${dish.image ? `<img src="${dish.image}" alt="${dish.name}" class="dish-image">` : '<div class="dish-image"></div>'}
+            ${dish.image ? `<img src="${dish.image}" alt="${dish.name}" class="dish-image">` : '<div class="dish-image dish-image-placeholder"></div>'}
             <div class="dish-content">
                 <div class="dish-header">
                     <div class="dish-name">${dish.name}</div>
@@ -769,7 +769,7 @@ function renderOwnerOrders() {
             <div class="order-header-owner">
                 <div class="order-id-section">
                     <strong>${order.orderId}</strong>
-                    <span class="order-mode-badge ${order.mode}">${order.mode === 'dinein' ? '🍽️ Dine-In' : '🚚 Delivery'}</span>
+                    <span class="order-mode-badge ${order.mode}">${order.mode === 'dinein' ? 'Dine-In' : 'Delivery'}</span>
                     ${order.mode === 'dinein' ? `<span style="color: var(--text-secondary);">Table ${order.tableNumber}</span>` : ''}
                 </div>
                 <div style="text-align: right;">

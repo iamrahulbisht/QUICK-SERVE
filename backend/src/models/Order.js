@@ -72,6 +72,20 @@ const orderSchema = new mongoose.Schema({
         type: String,
         enum: ['received', 'preparing', 'served', 'delivered', 'cancelled'],
         default: 'received'
+    },
+    rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+        default: null
+    },
+    review: {
+        type: String,
+        default: ''
+    },
+    ratedAt: {
+        type: Date,
+        default: null
     }
 }, {
     timestamps: true

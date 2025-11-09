@@ -353,3 +353,65 @@ exports.cancelOrder = async (req, res) => {
         });
     }
 };
+
+exports.rateOrder = async (req, res) => {
+    try {
+        if (req.user.role !== 'customer') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only customers can rate orders'
+            });
+        }
+
+        const { rating, review } = req.body;
+
+        // Validate rating
+        if (!rating || rating < 1 || rating > 5) {
+            return res.status(400).json({
+                success: false,
+                message: 'Rating must be between 1 and 5'
+            });
+        }
+
+        const order = await Order.findOne({ orderId: req.params.orderId, userId: req.user._id });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        // Check if order is delivered or served
+        if (order.status !== 'served' && order.status !== 'delivered') {
+            return res.status(400).json({
+                success: false,
+                message: 'You can only rate orders that have been delivered or served'
+            });
+        }
+
+        // Check if already rated
+        if (order.rating) {
+            return res.status(400).json({
+                success: false,
+                message: 'You have already rated this order'
+            });
+        }
+
+        order.rating = rating;
+        order.review = review || '';
+        order.ratedAt = new Date();
+        await order.save();
+
+        res.json({
+            success: true,
+            message: 'Rating submitted successfully',
+            data: order
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

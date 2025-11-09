@@ -15,7 +15,7 @@
     <!-- Login Page -->
     <div id="loginPage" class="auth-page">
         <div class="auth-card">
-            <div class="logo">🍽️ QuickServe</div>
+            <div class="logo">QuickServe</div>
             <h2>Welcome Back</h2>
             <div id="loginError" class="error-message hidden"></div>
             <form id="loginForm">
@@ -70,7 +70,7 @@
     <!-- Restaurant Owner Signup Page -->
     <div id="restaurantOwnerSignupPage" class="auth-page hidden">
         <div class="auth-card" style="max-width: 700px;">
-            <div class="logo">🍽️ QuickServe</div>
+            <div class="logo">QuickServe</div>
             <h2>Register Your Restaurant</h2>
             <div id="ownerSignupError" class="error-message hidden"></div>
             <form id="ownerSignupForm">
@@ -188,34 +188,34 @@
     <div id="restaurantOwnerDashboard" class="dashboard hidden">
         <div class="dashboard-sidebar">
             <div class="sidebar-header">
-                <div class="logo">🍽️ QuickServe</div>
+                <div class="logo">QuickServe</div>
                 <div class="restaurant-info" id="sidebarRestaurantInfo">
                     <div class="restaurant-name">Loading...</div>
                 </div>
             </div>
             <nav class="sidebar-nav">
                 <button class="nav-item active" onclick="showOwnerDashboardTab('overview')">
-                    <span class="nav-icon">📊</span>
+                    <span class="nav-icon"></span>
                     <span>Dashboard</span>
                 </button>
                 <button class="nav-item" onclick="showOwnerDashboardTab('dishes')">
-                    <span class="nav-icon">🍽️</span>
+                    <span class="nav-icon"></span>
                     <span>Dishes</span>
                 </button>
                 <button class="nav-item" onclick="showOwnerDashboardTab('orders')">
-                    <span class="nav-icon">📦</span>
+                    <span class="nav-icon"></span>
                     <span>Orders</span>
                 </button>
                 <button class="nav-item" onclick="showOwnerDashboardTab('qrcodes')">
-                    <span class="nav-icon">📱</span>
+                    <span class="nav-icon"></span>
                     <span>QR Codes</span>
                 </button>
                 <button class="nav-item" onclick="showOwnerDashboardTab('settings')">
-                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-icon"></span>
                     <span>Settings</span>
                 </button>
                 <button class="nav-item logout-btn" onclick="logout()">
-                    <span class="nav-icon">🚪</span>
+                    <span class="nav-icon"></span>
                     <span>Logout</span>
                 </button>
             </nav>
@@ -352,7 +352,7 @@
     <!-- Signup Page -->
     <div id="signupPage" class="auth-page hidden">
         <div class="auth-card">
-            <div class="logo">🍽️ QuickServe</div>
+            <div class="logo">QuickServe</div>
             <h2>Create Account</h2>
             <div id="signupError" class="error-message hidden"></div>
             <form id="signupForm">
@@ -435,13 +435,13 @@
                     <div class="role-selection">
                         <label class="role-card selected" id="customerRole">
                             <input type="radio" name="role" value="customer" checked>
-                            <div class="role-icon">🛒</div>
+                            <div class="role-icon">C</div>
                             <div class="role-title">Customer</div>
                             <div class="role-description">Browse and order food</div>
                         </label>
                         <label class="role-card" id="adminRole">
                             <input type="radio" name="role" value="admin">
-                            <div class="role-icon">⚙️</div>
+                            <div class="role-icon">A</div>
                             <div class="role-title">Admin</div>
                             <div class="role-description">Manage restaurant operations</div>
                         </label>
@@ -462,9 +462,8 @@
             <div class="container">
                 <div class="header-content">
                     <div class="header-left">
-                        <div class="logo">🍽️ QuickServe</div>
+                        <div class="logo">QuickServe</div>
                         <div class="search-bar">
-                            <span>🔍</span>
                             <input type="text" placeholder="Search restaurants or dishes..." id="searchInput">
                         </div>
                     </div>
@@ -517,11 +516,9 @@
                         <h3>How would you like to order?</h3>
                         <div class="mode-buttons">
                             <button class="mode-btn active" data-mode="delivery" onclick="selectOrderMode('delivery')">
-                                <span class="mode-icon">🚚</span>
                                 <span class="mode-text">Delivery</span>
                             </button>
                             <button class="mode-btn" data-mode="dinein" onclick="selectOrderMode('dinein')">
-                                <span class="mode-icon">🍽️</span>
                                 <span class="mode-text">Dine-In</span>
                             </button>
                         </div>

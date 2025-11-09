@@ -354,7 +354,7 @@ function normalizeRestaurantData(restaurant) {
         id: frontendId,
         backendId,
         name: restaurant.name,
-        emoji: restaurant.emoji || '🍽️',
+        emoji: restaurant.emoji || '',
         cuisine: restaurant.cuisine || 'Multi-Cuisine',
         rating: restaurant.rating || 4.5,
         deliveryTime: restaurant.deliveryTime || '30-40 mins',
@@ -536,6 +536,11 @@ function showMenu(restaurantId) {
     }
     
     document.getElementById('homePage').classList.add('hidden');
+    document.getElementById('checkoutPage').classList.add('hidden');
+    document.getElementById('successPage').classList.add('hidden');
+    document.getElementById('profilePage').classList.add('hidden');
+    document.getElementById('orderHistoryPage').classList.add('hidden');
+    document.getElementById('adminPage').classList.add('hidden');
     document.getElementById('menuPage').classList.remove('hidden');
     
     renderMenu();
@@ -569,7 +574,7 @@ function showCheckout() {
         addressSection.style.display = 'none';
         orderModeInfo.innerHTML = `
             <div style="display: flex; align-items: center; gap: 12px;">
-                <span class="mode-badge dinein">🍽️ Dine-In</span>
+                <span class="mode-badge dinein">Dine-In</span>
                 <span style="font-weight: 600;">Table ${tableNum}</span>
                 <span style="color: var(--text-light);">|</span>
                 <span style="color: var(--text-secondary);">Your order will be served at your table</span>
@@ -583,7 +588,7 @@ function showCheckout() {
         if (deliveryDetails && !deliveryDetails.isAvailable) {
             orderModeInfo.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fee; border-radius: 8px; border: 1px solid #fcc;">
-                    <span style="color: #c00; font-size: 20px;">⚠️</span>
+                    <span style="color: #c00; font-size: 20px; font-weight: bold;">!</span>
                     <div>
                         <div style="font-weight: 600; color: #c00;">Delivery Not Available</div>
                         <div style="color: #666; font-size: 14px;">Distance (${deliveryDetails.distance} km) exceeds maximum delivery range (${DELIVERY_CONFIG.MAX_DISTANCE_KM} km)</div>
@@ -593,14 +598,14 @@ function showCheckout() {
         } else if (deliveryDetails) {
             orderModeInfo.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span class="mode-badge delivery">🚚 Delivery</span>
+                    <span class="mode-badge delivery">Delivery</span>
                     <span style="color: var(--text-secondary);">Distance: ${deliveryDetails.distance} km | Est. Time: ${deliveryDetails.deliveryTime} mins</span>
                 </div>
             `;
         } else {
             orderModeInfo.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span class="mode-badge delivery">🚚 Delivery</span>
+                    <span class="mode-badge delivery">Delivery</span>
                     <span style="color: var(--text-secondary);">Please select your delivery location to see delivery details</span>
                 </div>
             `;
@@ -742,7 +747,7 @@ function renderMenu() {
             itemDiv.innerHTML = `
                 <img src="${item.image || ''}" alt="${item.name}" class="menu-item-image" 
                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="menu-item-image-placeholder" style="display: none;">🍽️</div>
+                <div class="menu-item-image-placeholder" style="display: none;"></div>
                 <div class="menu-item-content">
                     <div class="menu-item-header">
                         <div class="menu-item-name">${item.name}</div>
@@ -954,7 +959,7 @@ function renderCheckoutSummary() {
             summaryDiv.innerHTML = `
                 <h4 style="margin-bottom: 12px;">Order Summary</h4>
                 <div style="padding: 20px; text-align: center; color: #c00; background: #fee; border-radius: 8px;">
-                    <div style="font-size: 40px; margin-bottom: 12px;">⚠️</div>
+                    <div style="font-size: 40px; margin-bottom: 12px; font-weight: bold; color: #c00;">!</div>
                     <div style="font-weight: 600; margin-bottom: 8px;">Delivery Not Available</div>
                     <div style="font-size: 14px;">The restaurant is ${deliveryDetails.distance} km away. Maximum delivery distance is ${DELIVERY_CONFIG.MAX_DISTANCE_KM} km.</div>
                     <button class="btn-secondary" style="margin-top: 16px;" onclick="backToMenu()">Back to Menu</button>
@@ -1396,7 +1401,7 @@ async function loadOrderHistory() {
         if (!data.success || data.data.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-state-icon">📦</div>
+                    <div class="empty-state-icon"></div>
                     <h3>No orders yet</h3>
                     <p>Start exploring restaurants and place your first order!</p>
                     <button class="btn" onclick="showHome()">Browse Restaurants</button>
@@ -1433,8 +1438,8 @@ async function loadOrderHistory() {
             // Determine order mode badge
             const orderMode = order.mode || 'delivery';
             const modeBadge = orderMode === 'dinein' 
-                ? `<span class="mode-badge dinein">🍽️ Dine-In</span>` 
-                : `<span class="mode-badge delivery">🚚 Delivery</span>`;
+                ? `<span class="mode-badge dinein">Dine-In</span>` 
+                : `<span class="mode-badge delivery">Delivery</span>`;
             
             // Show appropriate location info based on mode
             let locationInfo = '';
@@ -1457,6 +1462,42 @@ async function loadOrderHistory() {
             const canCancel = order.status !== 'served' && order.status !== 'delivered' && order.status !== 'cancelled';
             const cancelButton = canCancel ? 
                 `<button class="btn-cancel-order" onclick="cancelOrder('${order.orderId}')">Cancel Order</button>` : '';
+            
+            // Check if order can be rated
+            const canRate = (order.status === 'served' || order.status === 'delivered') && !order.rating;
+            const hasRating = order.rating && order.rating > 0;
+            
+            let ratingSection = '';
+            if (hasRating) {
+                // Display existing rating
+                const stars = '★'.repeat(order.rating) + '☆'.repeat(5 - order.rating);
+                ratingSection = `
+                    <div class="rating-container">
+                        <h4>Your Rating</h4>
+                        <div class="rating-display">
+                            <span class="stars">${stars}</span>
+                            <span class="rating-text">${order.rating} out of 5</span>
+                        </div>
+                        ${order.review ? `<p style="margin-top: 8px; color: var(--text-secondary); font-size: 14px;">"${order.review}"</p>` : ''}
+                    </div>
+                `;
+            } else if (canRate) {
+                // Show rating form
+                ratingSection = `
+                    <div class="rating-container" id="rating-${order.orderId}">
+                        <h4>Rate this order</h4>
+                        <div class="star-rating" data-order-id="${order.orderId}">
+                            <span class="star" data-rating="1">☆</span>
+                            <span class="star" data-rating="2">☆</span>
+                            <span class="star" data-rating="3">☆</span>
+                            <span class="star" data-rating="4">☆</span>
+                            <span class="star" data-rating="5">☆</span>
+                        </div>
+                        <textarea class="review-input" id="review-${order.orderId}" placeholder="Share your experience (optional)"></textarea>
+                        <button class="submit-rating-btn" onclick="submitRating('${order.orderId}')" disabled>Submit Rating</button>
+                    </div>
+                `;
+            }
             
             orderCard.innerHTML = `
                 <div class="order-card-header">
@@ -1481,15 +1522,50 @@ async function loadOrderHistory() {
                     </div>
                     ${cancelButton}
                 </div>
+                
+                ${ratingSection}
             `;
             
             container.appendChild(orderCard);
+            
+            // Add event listeners for stars if rating is available
+            if (canRate) {
+                const starContainer = orderCard.querySelector('.star-rating');
+                const stars = starContainer.querySelectorAll('.star');
+                const submitBtn = orderCard.querySelector('.submit-rating-btn');
+                let selectedRating = 0;
+                
+                stars.forEach((star, index) => {
+                    star.addEventListener('mouseenter', () => {
+                        stars.forEach((s, i) => {
+                            s.textContent = i <= index ? '★' : '☆';
+                            s.classList.toggle('active', i <= index);
+                        });
+                    });
+                    
+                    star.addEventListener('click', () => {
+                        selectedRating = index + 1;
+                        stars.forEach((s, i) => {
+                            s.classList.toggle('filled', i <= index);
+                        });
+                        submitBtn.disabled = false;
+                        starContainer.dataset.selectedRating = selectedRating;
+                    });
+                });
+                
+                starContainer.addEventListener('mouseleave', () => {
+                    stars.forEach((s, i) => {
+                        s.textContent = i < selectedRating ? '★' : '☆';
+                        s.classList.toggle('active', false);
+                    });
+                });
+            }
         });
     } catch (error) {
         console.error('Error loading order history:', error);
         container.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">⚠️</div>
+                <div class="empty-state-icon"></div>
                 <h3>Failed to load orders</h3>
                 <p>Please try again later</p>
             </div>
@@ -1598,7 +1674,7 @@ async function renderAdminOrders() {
             // Show appropriate location info based on mode
             let locationInfo = '';
             if (orderMode === 'dinein') {
-                locationInfo = `<span class="mode-badge dinein">🍽️ Table ${order.tableNumber}</span>`;
+                locationInfo = `<span class="mode-badge dinein">Table ${order.tableNumber}</span>`;
             } else {
                 locationInfo = order.address || '—';
             }
@@ -2458,7 +2534,7 @@ function updateDeliveryInfo() {
         // Delivery not available
         deliveryInfoDiv.innerHTML = `
             <div style="padding: 16px; text-align: center; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
-                <div style="font-size: 32px; margin-bottom: 8px;">⚠️</div>
+                <div style="font-size: 32px; margin-bottom: 8px; font-weight: bold; color: #dc2626;">!</div>
                 <h3 style="margin-bottom: 8px; color: #dc2626;">Delivery Not Available</h3>
                 <p style="color: #991b1b; font-size: 14px;">Distance (${deliveryDetails.distance} km) exceeds maximum range (${DELIVERY_CONFIG.MAX_DISTANCE_KM} km)</p>
             </div>
@@ -2496,7 +2572,7 @@ function checkDineInMode() {
             const banner = document.createElement('div');
             banner.id = 'dineInBanner';
             banner.style.cssText = 'background: var(--accent-purple); color: white; padding: 12px; text-align: center; font-weight: 500;';
-            banner.innerHTML = `🍽️ Dine-In Mode - Table ${table}`;
+            banner.innerHTML = `Dine-In Mode - Table ${table}`;
             header.parentNode.insertBefore(banner, header.nextSibling);
         }
         
@@ -2628,7 +2704,7 @@ function renderRestaurantsTable(restaurants) {
             <tr>
                 <td>
                     <div class="restaurant-info">
-                        <div class="restaurant-logo">${restaurant.emoji || '🍽️'}</div>
+                        <div class="restaurant-logo">${restaurant.name.charAt(0).toUpperCase()}</div>
                         <div class="restaurant-name-block">
                             <div class="restaurant-name">${restaurant.name}</div>
                             <div class="restaurant-address">${restaurant.address || 'N/A'}</div>
@@ -3221,7 +3297,7 @@ function getCurrentLocation() {
                         if (deliveryDetails && !deliveryDetails.isAvailable) {
                             orderModeInfo.innerHTML = `
                                 <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fee; border-radius: 8px; border: 1px solid #fcc;">
-                                    <span style="color: #c00; font-size: 20px;">⚠️</span>
+                                    <span style="color: #c00; font-size: 20px; font-weight: bold;">!</span>
                                     <div>
                                         <div style="font-weight: 600; color: #c00;">Delivery Not Available</div>
                                         <div style="color: #666; font-size: 14px;">Distance (${deliveryDetails.distance} km) exceeds maximum delivery range (${DELIVERY_CONFIG.MAX_DISTANCE_KM} km)</div>
@@ -3231,7 +3307,7 @@ function getCurrentLocation() {
                         } else if (deliveryDetails) {
                             orderModeInfo.innerHTML = `
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                    <span class="mode-badge delivery">🚚 Delivery</span>
+                                    <span class="mode-badge delivery">Delivery</span>
                                     <span style="color: var(--text-secondary);">Distance: ${deliveryDetails.distance} km | Est. Time: ${deliveryDetails.deliveryTime} mins</span>
                                 </div>
                             `;
@@ -3514,7 +3590,7 @@ function confirmDeliveryLocation() {
         if (deliveryDetails && !deliveryDetails.isAvailable) {
             orderModeInfo.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fee; border-radius: 8px; border: 1px solid #fcc;">
-                    <span style="color: #c00; font-size: 20px;">⚠️</span>
+                    <span style="color: #c00; font-size: 20px; font-weight: bold;">!</span>
                     <div>
                         <div style="font-weight: 600; color: #c00;">Delivery Not Available</div>
                         <div style="color: #666; font-size: 14px;">Distance (${deliveryDetails.distance} km) exceeds maximum delivery range (${DELIVERY_CONFIG.MAX_DISTANCE_KM} km)</div>
@@ -3524,7 +3600,7 @@ function confirmDeliveryLocation() {
         } else if (deliveryDetails) {
             orderModeInfo.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span class="mode-badge delivery">🚚 Delivery</span>
+                    <span class="mode-badge delivery">Delivery</span>
                     <span style="color: var(--text-secondary);">Distance: ${deliveryDetails.distance} km | Est. Time: ${deliveryDetails.deliveryTime} mins</span>
                 </div>
             `;
@@ -3539,12 +3615,58 @@ function confirmDeliveryLocation() {
     console.log('Delivery location confirmed:', selectedPlaceDetails);
 }
 
+// Rating submission function
+async function submitRating(orderId) {
+    try {
+        const starContainer = document.querySelector(`.star-rating[data-order-id="${orderId}"]`);
+        const rating = parseInt(starContainer.dataset.selectedRating);
+        const review = document.getElementById(`review-${orderId}`).value.trim();
+        
+        if (!rating || rating < 1 || rating > 5) {
+            alert('Please select a rating');
+            return;
+        }
+        
+        const response = await fetch(`${API_URL}/orders/${orderId}/rate`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ rating, review })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Replace rating form with success message
+            const ratingContainer = document.getElementById(`rating-${orderId}`);
+            const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+            ratingContainer.innerHTML = `
+                <h4>Your Rating</h4>
+                <div class="rating-display">
+                    <span class="stars">${stars}</span>
+                    <span class="rating-text">${rating} out of 5</span>
+                </div>
+                ${review ? `<p style="margin-top: 8px; color: var(--text-secondary); font-size: 14px;">"${review}"</p>` : ''}
+                <div class="rated-message">Thank you for your feedback!</div>
+            `;
+        } else {
+            alert(data.message || 'Failed to submit rating');
+        }
+    } catch (error) {
+        console.error('Error submitting rating:', error);
+        alert('Error submitting rating. Please try again.');
+    }
+}
+
 // Make functions globally available
 window.openDeliveryMapPicker = openDeliveryMapPicker;
 window.closeDeliveryMapPicker = closeDeliveryMapPicker;
 window.searchOnDeliveryMap = searchOnDeliveryMap;
 window.detectDeliveryLocation = detectDeliveryLocation;
 window.confirmDeliveryLocation = confirmDeliveryLocation;
+window.submitRating = submitRating;
 
 // Restaurant Map Picker Functions are now in owner.js using Leaflet
 

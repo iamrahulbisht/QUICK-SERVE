@@ -78,7 +78,7 @@ const restaurants = {
         id: 'pizza-corner',
         name: 'Pizza Corner',
         emoji: '🍕',
-        cardImage: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400&h=300&fit=crop',
+        cardImage: 'https://images.unsplash.com/photo-1594007654729-407eedc4be65?w=400&h=300&fit=crop',
         cuisine: 'Italian',
         rating: 4.7,
         deliveryTime: '30-35 mins',
@@ -91,7 +91,7 @@ const restaurants = {
                         name: 'Margherita Pizza',
                         description: 'Authentic Italian pizza with fresh mozzarella, tomato sauce, and basil',
                         price: 299,
-                        image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&h=600&fit=crop',
+                        image: 'https://images.unsplash.com/photo-1594007654729-407eedc4be65?w=800&h=600&fit=crop',
                         vegetarian: true
                     },
                     {
@@ -99,7 +99,7 @@ const restaurants = {
                         name: 'Pepperoni Pizza',
                         description: 'Classic pizza loaded with pepperoni slices and extra cheese',
                         price: 349,
-                        image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&h=600&fit=crop',
+                        image: 'https://images.unsplash.com/photo-1528137871618-79d2761e3fd5?w=800&h=600&fit=crop',
                         vegetarian: false
                     },
                     {
@@ -107,7 +107,7 @@ const restaurants = {
                         name: 'Quattro Formaggi',
                         description: 'Four cheese pizza with mozzarella, gorgonzola, parmesan, and fontina',
                         price: 379,
-                        image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop',
+                        image: 'https://images.unsplash.com/photo-1598021680135-2d835b62f728?w=800&h=600&fit=crop',
                         vegetarian: true
                     }
                 ]
@@ -120,7 +120,7 @@ const restaurants = {
                         name: 'Vegetarian Supreme',
                         description: 'Bell peppers, mushrooms, olives, onions, and fresh vegetables',
                         price: 329,
-                        image: 'https://images.unsplash.com/photo-1571407970349-bc81e7e96e47?w=800&h=600&fit=crop',
+                        image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop',
                         vegetarian: true
                     }
                 ]
@@ -144,7 +144,7 @@ const restaurants = {
         id: 'chinese-garden',
         name: 'Chinese Garden',
         emoji: '🥡',
-        cardImage: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=400&h=300&fit=crop',
+        cardImage: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&h=300&fit=crop',
         cuisine: 'Chinese',
         rating: 4.6,
         deliveryTime: '20-25 mins',
@@ -157,7 +157,7 @@ const restaurants = {
                         name: 'Vegetable Fried Rice',
                         description: 'Authentic Chinese fried rice with mixed vegetables, eggs, and soy sauce',
                         price: 199,
-                        image: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=800&h=600&fit=crop',
+                        image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&h=600&fit=crop',
                         vegetarian: false
                     },
                     {
@@ -165,7 +165,7 @@ const restaurants = {
                         name: 'Hakka Noodles',
                         description: 'Stir-fried noodles with vegetables in Chinese sauces',
                         price: 219,
-                        image: 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?w=800&h=600&fit=crop',
+                        image: 'https://images.unsplash.com/photo-1552611052-33e04de081de?w=800&h=600&fit=crop',
                         vegetarian: true
                     },
                     {
@@ -239,7 +239,7 @@ const restaurants = {
         id: 'spice-of-india',
         name: 'Spice of India',
         emoji: '🍛',
-        cardImage: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&h=300&fit=crop',
+        cardImage: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=400&h=300&fit=crop',
         cuisine: 'Indian',
         rating: 4.8,
         deliveryTime: '30-40 mins',
@@ -252,7 +252,7 @@ const restaurants = {
                         name: 'Hyderabadi Chicken Biryani',
                         description: 'Aromatic basmati rice layered with tender chicken, spices, and saffron',
                         price: 299,
-                        image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&h=600&fit=crop',
+                        image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&h=600&fit=crop',
                         vegetarian: false
                     },
                     {
@@ -273,7 +273,7 @@ const restaurants = {
                         name: 'Butter Chicken',
                         description: 'Tender chicken in rich, creamy tomato-based gravy with butter and cream',
                         price: 329,
-                        image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&h=600&fit=crop',
+                        image: 'https://images.unsplash.com/photo-1565557623262-b27e252489a1?w=800&h=600&fit=crop',
                         vegetarian: false
                     },
                     {
